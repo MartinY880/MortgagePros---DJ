@@ -5,7 +5,11 @@ class SocketService {
 
   connect() {
     if (!this.socket) {
-      this.socket = io('http://localhost:5000', {
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || 
+                        (import.meta.env.VITE_API_URL?.replace('/api', '')) || 
+                        window.location.origin;
+      
+      this.socket = io(socketUrl, {
         withCredentials: true,
       });
 

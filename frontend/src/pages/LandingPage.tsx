@@ -5,9 +5,18 @@ export default function LandingPage() {
   const handleLogin = async () => {
     try {
       const response = await authApi.getAuthUrl();
-      window.location.href = response.data.authUrl;
-    } catch (error) {
+      console.log('Auth response:', response.data); // Debug log
+      
+      if (response.data && response.data.authUrl) {
+        window.location.href = response.data.authUrl;
+      } else {
+        console.error('No authUrl in response:', response);
+        alert('Failed to get Spotify login URL. Please check if the backend server is running.');
+      }
+    } catch (error: any) {
       console.error('Login error:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      alert(`Failed to connect: ${errorMsg}\n\nMake sure the backend server is running and accessible.`);
     }
   };
 
