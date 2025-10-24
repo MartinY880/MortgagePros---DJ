@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  spotifyId     String    @unique
+  displayName   String
+  email         String?
+  accessToken   String
+  refreshToken  String
+  tokenExpiry   DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  hostedSessions Session[] @relation("HostedSessions")
+  queueItems     QueueItem[]
+  votes          Vote[]
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  name        String
+  hostId      String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  host        User      @relation("HostedSessions", fields: [hostId], references: [id], onDelete: Cascade)
+  queueItems  QueueItem[]
+  
+  @@index([code])
+  @@index([hostId])
+}
+
+model QueueItem {
+  id              String    @id @default(uuid())
+  sessionId       String
+  spotifyTrackId  String
+  trackName       String
+  trackArtist     String
+  trackAlbum      String?
+  trackImage      String?
+  trackDuration   Int
+  addedById       String
+  voteScore       Int       @default(0)
+  played          Boolean   @default(false)
+  playedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  
+  session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  addedBy         User      @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  votes           Vote[]
+  
+  @@index([sessionId, played, voteScore])
+  @@index([spotifyTrackId])
+}
+
+model Vote {
+  id            String    @id @default(uuid())
+  queueItemId   String
+  userId        String
+  voteType      Int       // 1 for upvote, -1 for downvote
+  createdAt     DateTime  @default(now())
+  
+  queueItem     QueueItem @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([queueItemId, userId])
+  @@index([queueItemId])
+  @@index([userId])
+}
