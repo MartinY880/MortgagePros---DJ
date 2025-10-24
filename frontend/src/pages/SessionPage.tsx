@@ -1,18 +1,21 @@
-import { ChangeEvent, KeyboardEvent, useState, useEffect } from 'react';
+import { ChangeEvent, KeyboardEvent, useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, Check } from 'lucide-react';
-import { sessionApi, queueApi, guestApi } from '../services/api';
+import { sessionApi, queueApi, guestApi, spotifyApi } from '../services/api';
 import { socketService } from '../services/socket';
-import { Session, QueueItem, SessionParticipant } from '../types';
+import { Session, SessionParticipant, QueueState, PlaybackState } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
+import NextUp from '../components/NextUp';
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [queueState, setQueueState] = useState<QueueState>({ nextUp: null, queue: [] });
+  const [playback, setPlayback] = useState<PlaybackState | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [participant, setParticipant] = useState<SessionParticipant | null>(null);
@@ -20,28 +23,6 @@ export default function SessionPage() {
   const [guestName, setGuestName] = useState('');
   const [joiningGuest, setJoiningGuest] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!sessionId) return;
-
-    fetchSession();
-    fetchQueue();
-    fetchParticipant();
-
-    // Connect to socket
-    socketService.connect();
-    socketService.joinSession(sessionId);
-
-    // Listen for queue updates
-    socketService.onQueueUpdated((data) => {
-      setQueue(data.queue);
-    });
-
-    return () => {
-      socketService.leaveSession(sessionId);
-      socketService.disconnect();
-    };
-  }, [sessionId]);
 
   const fetchSession = async () => {
     try {
@@ -54,15 +35,70 @@ export default function SessionPage() {
       setLoading(false);
     }
   };
+  const fetchQueue = useCallback(async () => {
+    if (!sessionId) return;
 
-  const fetchQueue = async () => {
     try {
-      const response = await queueApi.get(sessionId!);
-      setQueue(response.data.queue);
+      const response = await queueApi.get(sessionId);
+      setQueueState({
+        nextUp: response.data.nextUp ?? null,
+        queue: response.data.queue ?? [],
+      });
     } catch (error) {
       console.error('Failed to fetch queue:', error);
     }
-  };
+  }, [sessionId]);
+
+  const fetchPlayback = useCallback(async () => {
+    if (!sessionId) return;
+
+    try {
+      const response = await spotifyApi.getPlayback(sessionId);
+      setPlayback(response.data.playback || null);
+      setPlaybackError(null);
+    } catch (error: any) {
+      console.error('Failed to fetch playback:', error);
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        setPlaybackError('Join the session to view playback');
+      } else {
+        setPlaybackError('Playback data unavailable');
+      }
+      setPlayback(null);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    fetchSession();
+    fetchQueue();
+    fetchParticipant();
+    fetchPlayback();
+
+    // Connect to socket
+    socketService.connect();
+    const queueCleanup = socketService.onQueueUpdated((data) => {
+      setQueueState({
+        nextUp: data.nextUp ?? null,
+        queue: data.queue ?? [],
+      });
+    });
+
+    const playbackCleanup = socketService.onNowPlaying((data) => {
+      setPlayback(data.playback ?? null);
+      setPlaybackError(null);
+    });
+
+    socketService.joinSession(sessionId);
+
+    return () => {
+      queueCleanup?.();
+      playbackCleanup?.();
+      socketService.leaveSession(sessionId);
+      socketService.disconnect();
+    };
+  }, [sessionId, fetchQueue, fetchPlayback]);
 
   const fetchParticipant = async () => {
     if (!sessionId) return;
@@ -86,8 +122,8 @@ export default function SessionPage() {
     setJoinError(null);
 
     try {
-      await guestApi.joinById(sessionId, guestName.trim());
-      await Promise.all([fetchParticipant(), fetchQueue()]);
+  await guestApi.joinById(sessionId, guestName.trim());
+  await Promise.all([fetchParticipant(), fetchQueue(), fetchPlayback()]);
       setGuestName('');
       setShowGuestModal(false);
     } catch (error: any) {
@@ -192,7 +228,15 @@ export default function SessionPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Queue Section */}
           <div className="lg:col-span-2 space-y-6">
-            <NowPlaying sessionId={sessionId!} canControl={participant?.type === 'host'} />
+            <NowPlaying
+              canControl={participant?.type === 'host'}
+              playback={playback}
+              error={playbackError}
+              setPlayback={setPlayback}
+              setError={setPlaybackError}
+              onRefresh={fetchPlayback}
+            />
+            <NextUp track={queueState.nextUp} />
             <SearchBar
               sessionId={sessionId!}
               onTrackAdded={fetchQueue}
@@ -200,7 +244,8 @@ export default function SessionPage() {
               onRequireAccess={handleRequireAccess}
             />
             <QueueList
-              queue={queue}
+              nextUp={queueState.nextUp}
+              queue={queueState.queue}
               sessionId={sessionId!}
               onQueueUpdate={fetchQueue}
               participant={participant}
@@ -223,9 +268,9 @@ export default function SessionPage() {
             <div className="bg-spotify-gray p-6 rounded-lg">
               <h3 className="text-xl font-bold text-white mb-2">Queue Stats</h3>
               <div className="space-y-2 text-gray-300">
-                <p>Tracks in queue: <span className="text-spotify-green font-bold">{queue.length}</span></p>
+                <p>Upcoming tracks: <span className="text-spotify-green font-bold">{queueState.queue.length + (queueState.nextUp ? 1 : 0)}</span></p>
                 <p>Total votes: <span className="text-spotify-green font-bold">
-                  {queue.reduce((sum, item) => sum + item.voteScore, 0)}
+                  {(queueState.nextUp?.voteScore ?? 0) + queueState.queue.reduce((sum, item) => sum + item.voteScore, 0)}
                 </span></p>
               </div>
             </div>

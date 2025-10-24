@@ -56,6 +56,7 @@ model QueueItem {
   addedById       String?
   addedByGuestId  String?
   voteScore       Int       @default(0)
+  isNextUp        Boolean   @default(false)
   played          Boolean   @default(false)
   playedAt        DateTime?
   createdAt       DateTime  @default(now())

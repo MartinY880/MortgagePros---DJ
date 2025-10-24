@@ -1,39 +1,26 @@
-import { useState, useEffect } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 import { Play, Pause, SkipForward } from 'lucide-react';
 import { spotifyApi } from '../services/api';
+import { PlaybackState } from '../types';
 
 interface NowPlayingProps {
-  sessionId: string;
   canControl?: boolean;
+  playback: PlaybackState | null;
+  error: string | null;
+  setPlayback: Dispatch<SetStateAction<PlaybackState | null>>;
+  setError: Dispatch<SetStateAction<string | null>>;
+  onRefresh: () => Promise<void>;
 }
 
-export default function NowPlaying({ sessionId: _sessionId, canControl = false }: NowPlayingProps) {
-  const [playback, setPlayback] = useState<any>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPlayback();
-    const interval = setInterval(fetchPlayback, 5000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_sessionId]);
-
-  const fetchPlayback = async () => {
-    try {
-      const response = await spotifyApi.getPlayback(_sessionId);
-      setPlayback(response.data.playback);
-      setIsPlaying(response.data.playback?.is_playing || false);
-      setError(null);
-    } catch (error) {
-      const status = (error as any)?.response?.status;
-      if (status === 401 || status === 403) {
-        setError('Join the session to view playback');
-      } else {
-        setError('Playback data unavailable');
-      }
-    }
-  };
+export default function NowPlaying({
+  canControl = false,
+  playback,
+  error,
+  setPlayback,
+  setError,
+  onRefresh,
+}: NowPlayingProps) {
+  const isPlaying = playback?.is_playing ?? false;
 
   const handlePlayPause = async () => {
     if (!canControl) return;
@@ -41,13 +28,18 @@ export default function NowPlaying({ sessionId: _sessionId, canControl = false }
     try {
       if (isPlaying) {
         await spotifyApi.pause();
+        setPlayback((current) => (current ? { ...current, is_playing: false } : current));
       } else {
         await spotifyApi.play();
+        setPlayback((current) => (current ? { ...current, is_playing: true } : current));
       }
-      setIsPlaying(!isPlaying);
+      setError(null);
+      setTimeout(() => {
+        void onRefresh();
+      }, 1000);
     } catch (error) {
       console.error('Playback control error:', error);
-      alert('Failed to control playback. Make sure Spotify is open on a device.');
+      setError('Failed to control playback. Make sure Spotify is open on a device.');
     }
   };
 
@@ -56,9 +48,12 @@ export default function NowPlaying({ sessionId: _sessionId, canControl = false }
 
     try {
       await spotifyApi.next();
-      setTimeout(fetchPlayback, 1000);
+      setTimeout(() => {
+        void onRefresh();
+      }, 1000);
     } catch (error) {
       console.error('Skip error:', error);
+      setError('Failed to skip track. Ensure Spotify is active on a device.');
     }
   };
 

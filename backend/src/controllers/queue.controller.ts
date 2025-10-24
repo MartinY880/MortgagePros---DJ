@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { queueService } from '../services/queue.service';
 import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
+import { playbackService } from '../services/playback.service';
+import { broadcastQueueUpdate } from '../sockets/handlers';
+import { Server as SocketIOServer } from 'socket.io';
 
 export class QueueController {
   private resolveSessionActor = async (req: Request, sessionId: string) => {
@@ -47,6 +50,17 @@ export class QueueController {
     } as const;
   };
 
+  private async emitQueueState(req: Request, sessionId: string) {
+    const state = await queueService.getQueueWithNext(sessionId);
+    const io = req.app.get('io') as SocketIOServer | undefined;
+
+    if (io) {
+      broadcastQueueUpdate(io, sessionId, state);
+    }
+
+    return state;
+  }
+
   add = async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
@@ -63,7 +77,10 @@ export class QueueController {
           .json({ error: context.error });
       }
 
-      const { session, actor, role } = context;
+    const { session, actor, role } = context;
+    const queuedBefore = await queueService.countActiveQueueItems(sessionId);
+
+    playbackService.ensureMonitor(sessionId, session.hostId);
 
       // Guests use the host's Spotify credentials
       const accessToken = await spotifyService.ensureValidToken(session.hostId);
@@ -81,16 +98,20 @@ export class QueueController {
         actor
       );
 
-      // Also push to the host's Spotify playback queue when possible
-      if (track.uri) {
+      const state = await this.emitQueueState(req, sessionId);
+
+      // Push to Spotify queue only if this is the first upcoming track
+      if (queuedBefore === 0 && state.nextUp && state.nextUp.id === queueItem.id) {
+        const trackUri = track.uri || `spotify:track:${track.id}`;
         try {
-          await spotifyService.addToQueue(track.uri, accessToken);
+          await spotifyService.addToQueue(trackUri, accessToken);
+          playbackService.recordManualQueue(sessionId, queueItem.id);
         } catch (queueError) {
           console.warn('Failed to add track to Spotify playback queue:', queueError);
         }
       }
 
-      res.json({ queueItem, role });
+      res.json({ queueItem, role, nextUp: state.nextUp, queue: state.queue });
     } catch (error: any) {
       console.error('Add to queue error:', error);
       res.status(error.message === 'Track already in queue' ? 400 : 500)
@@ -101,8 +122,12 @@ export class QueueController {
   get = async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
-      const queue = await queueService.getQueue(sessionId);
-      res.json({ queue });
+      const session = await sessionService.getSession(sessionId);
+      if (session?.isActive) {
+        playbackService.ensureMonitor(sessionId, session.hostId);
+      }
+      const state = await queueService.getQueueWithNext(sessionId);
+      res.json(state);
     } catch (error) {
       console.error('Get queue error:', error);
       res.status(500).json({ error: 'Failed to get queue' });
@@ -127,7 +152,12 @@ export class QueueController {
       }
 
       await queueService.removeFromQueue(queueItemId, context.actor);
-      res.json({ message: 'Removed from queue' });
+
+      if (queueItem.session.isActive) {
+        playbackService.ensureMonitor(queueItem.sessionId, queueItem.session.hostId);
+      }
+      const state = await this.emitQueueState(req, queueItem.sessionId);
+      res.json({ message: 'Removed from queue', nextUp: state.nextUp, queue: state.queue });
     } catch (error: any) {
       console.error('Remove from queue error:', error);
       res.status(error.message === 'Not authorized to remove this track' ? 403 : 500)
@@ -158,7 +188,8 @@ export class QueueController {
       }
 
       const result = await queueService.vote(queueItemId, context.actor, voteType);
-      res.json(result);
+      const state = await this.emitQueueState(req, queueItem.sessionId);
+      res.json({ ...result, nextUp: state.nextUp, queue: state.queue });
     } catch (error) {
       console.error('Vote error:', error);
       res.status(500).json({ error: 'Failed to vote' });

@@ -3,6 +3,7 @@ import { queueApi } from '../services/api';
 import { QueueItem, SessionParticipant } from '../types';
 
 interface QueueListProps {
+  nextUp?: QueueItem | null;
   queue: QueueItem[];
   sessionId: string;
   onQueueUpdate: () => void;
@@ -10,7 +11,7 @@ interface QueueListProps {
   onRequireAccess: () => void;
 }
 
-export default function QueueList({ queue, sessionId: _sessionId, onQueueUpdate, participant, onRequireAccess }: QueueListProps) {
+export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionId, onQueueUpdate, participant, onRequireAccess }: QueueListProps) {
   const canRemove = (item: QueueItem) => {
     if (!participant) return false;
     if (participant.type === 'host') return true;
@@ -75,8 +76,8 @@ export default function QueueList({ queue, sessionId: _sessionId, onQueueUpdate,
   if (queue.length === 0) {
     return (
       <div className="bg-spotify-gray p-8 rounded-lg text-center">
-        <p className="text-gray-400 text-lg">No tracks in queue yet!</p>
-        <p className="text-gray-500 text-sm mt-2">Search and add songs to get started</p>
+        <p className="text-gray-400 text-lg">No additional tracks queued.</p>
+        <p className="text-gray-500 text-sm mt-2">Search and add songs to line up more music.</p>
       </div>
     );
   }

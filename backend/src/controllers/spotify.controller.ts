@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
+import { playbackService } from '../services/playback.service';
 
 export class SpotifyController {
   async search(req: Request, res: Response) {
@@ -28,6 +29,9 @@ export class SpotifyController {
         }
 
         tokenOwnerId = session.hostId;
+        if (session.isActive) {
+          playbackService.ensureMonitor(sessionId, session.hostId);
+        }
       } else if (req.session.userId) {
         tokenOwnerId = req.session.userId;
       }
@@ -67,6 +71,9 @@ export class SpotifyController {
         }
 
         tokenOwnerId = session.hostId;
+        if (session.isActive) {
+          playbackService.ensureMonitor(sessionId, session.hostId);
+        }
       } else if (req.session.userId) {
         tokenOwnerId = req.session.userId;
       }

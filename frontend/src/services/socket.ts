@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { QueueState, PlaybackState } from '../types';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -39,24 +40,39 @@ class SocketService {
     this.socket?.emit('leave_session', sessionId);
   }
 
-  onQueueUpdated(callback: (data: { queue: any[] }) => void) {
-    this.socket?.on('queue_updated', callback);
+  onQueueUpdated(callback: (data: QueueState) => void) {
+    if (!this.socket) return () => undefined;
+
+    this.socket.on('queue_updated', callback);
+    return () => this.socket?.off('queue_updated', callback);
   }
 
   onVoteUpdated(callback: (data: { queueItemId: string; voteScore: number }) => void) {
-    this.socket?.on('vote_updated', callback);
+    if (!this.socket) return () => undefined;
+
+    this.socket.on('vote_updated', callback);
+    return () => this.socket?.off('vote_updated', callback);
   }
 
-  onNowPlaying(callback: (data: { track: any }) => void) {
-    this.socket?.on('now_playing', callback);
+  onNowPlaying(callback: (data: { playback: PlaybackState | null }) => void) {
+    if (!this.socket) return () => undefined;
+
+    this.socket.on('now_playing', callback);
+    return () => this.socket?.off('now_playing', callback);
   }
 
   onUserJoined(callback: (data: { socketId: string; userCount: number }) => void) {
-    this.socket?.on('user_joined', callback);
+    if (!this.socket) return () => undefined;
+
+    this.socket.on('user_joined', callback);
+    return () => this.socket?.off('user_joined', callback);
   }
 
   onUserLeft(callback: (data: { socketId: string; userCount: number }) => void) {
-    this.socket?.on('user_left', callback);
+    if (!this.socket) return () => undefined;
+
+    this.socket.on('user_left', callback);
+    return () => this.socket?.off('user_left', callback);
   }
 
   off(event: string, callback?: any) {

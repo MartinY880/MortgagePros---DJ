@@ -31,6 +31,7 @@ export interface QueueItem {
   addedById?: string | null;
   addedByGuestId?: string | null;
   voteScore: number;
+  isNextUp: boolean;
   played: boolean;
   playedAt: string | null;
   createdAt: string;
@@ -56,6 +57,11 @@ export interface SessionParticipant {
   type: 'host' | 'guest' | 'none';
   name?: string;
   guestId?: string;
+}
+
+export interface QueueState {
+  nextUp: QueueItem | null;
+  queue: QueueItem[];
 }
 
 export interface SpotifyTrack {

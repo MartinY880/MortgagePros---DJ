@@ -20,6 +20,115 @@ export class QueueService {
     };
   }
 
+  private async getOrderedQueue(sessionId: string) {
+    return prisma.queueItem.findMany({
+      where: {
+        sessionId,
+        played: false,
+      },
+      include: this.includeRelations(),
+      orderBy: [
+        { voteScore: 'desc' },
+        { createdAt: 'asc' },
+      ],
+    });
+  }
+
+  private async getCurrentNextUp(sessionId: string) {
+    return prisma.queueItem.findFirst({
+      where: {
+        sessionId,
+        played: false,
+        isNextUp: true,
+      } as any,
+      include: this.includeRelations(),
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
+  private async promoteNextTrack(sessionId: string) {
+    const existing = await this.getCurrentNextUp(sessionId);
+
+    if (existing) {
+      await prisma.queueItem.updateMany({
+        where: {
+          sessionId,
+          isNextUp: true,
+          id: { not: existing.id },
+        } as any,
+        data: { isNextUp: false } as any,
+      });
+      return existing;
+    }
+
+    const next = await prisma.queueItem.findFirst({
+      where: {
+        sessionId,
+        played: false,
+      } as any,
+      orderBy: [
+        { voteScore: 'desc' },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    if (!next) {
+      return null;
+    }
+
+    await prisma.queueItem.updateMany({
+      where: {
+        sessionId,
+        isNextUp: true,
+        id: { not: next.id },
+      } as any,
+      data: { isNextUp: false } as any,
+    });
+
+    return prisma.queueItem.update({
+      where: { id: next.id },
+      data: { isNextUp: true } as any,
+      include: this.includeRelations(),
+    });
+  }
+
+  async getQueueWithNext(sessionId: string) {
+    let nextUp = await this.getCurrentNextUp(sessionId);
+
+    if (!nextUp) {
+      nextUp = await this.promoteNextTrack(sessionId);
+    }
+
+    const queue = await prisma.queueItem.findMany({
+      where: {
+        sessionId,
+        played: false,
+        ...(nextUp ? { id: { not: nextUp.id } } : {}),
+      } as any,
+      include: this.includeRelations(),
+      orderBy: [
+        { voteScore: 'desc' },
+        { createdAt: 'asc' },
+      ],
+    });
+
+    return {
+      nextUp: nextUp || null,
+      queue,
+    };
+  }
+
+  async countActiveQueueItems(sessionId: string) {
+    return prisma.queueItem.count({
+      where: {
+        sessionId,
+        played: false,
+      },
+    });
+  }
+
   async addToQueue(
     sessionId: string,
     spotifyTrackId: string,
@@ -68,23 +177,18 @@ export class QueueService {
       include: this.includeRelations(),
     });
 
-    return queueItem;
+    await this.promoteNextTrack(sessionId);
+
+    const refreshed = await prisma.queueItem.findUnique({
+      where: { id: queueItem.id },
+      include: this.includeRelations(),
+    });
+
+    return refreshed ?? queueItem;
   }
 
   async getQueue(sessionId: string) {
-    const queue = await prisma.queueItem.findMany({
-      where: {
-        sessionId,
-        played: false,
-      },
-      include: this.includeRelations(),
-      orderBy: [
-        { voteScore: 'desc' },
-        { createdAt: 'asc' },
-      ],
-    });
-
-    return queue;
+    return this.getOrderedQueue(sessionId);
   }
 
   async removeFromQueue(
@@ -114,6 +218,8 @@ export class QueueService {
     await prisma.queueItem.delete({
       where: { id: queueItemId },
     });
+
+    await this.promoteNextTrack(queueItem.sessionId);
   }
 
   async vote(
@@ -233,18 +339,59 @@ export class QueueService {
   }
 
   async markAsPlayed(queueItemId: string) {
+    const queueItem = await prisma.queueItem.findUnique({
+      where: { id: queueItemId },
+    });
+
+    if (!queueItem) {
+      return;
+    }
+
     await prisma.queueItem.update({
       where: { id: queueItemId },
       data: {
         played: true,
+        isNextUp: false,
         playedAt: new Date(),
+      } as any,
+    });
+
+    await this.promoteNextTrack(queueItem.sessionId);
+  }
+
+  async markTrackAsPlayed(sessionId: string, spotifyTrackId: string) {
+    const queueItem = await prisma.queueItem.findFirst({
+      where: {
+        sessionId,
+        spotifyTrackId,
+        played: false,
+      },
+      orderBy: {
+        createdAt: 'asc',
       },
     });
+
+    if (!queueItem) {
+      return null;
+    }
+
+    await prisma.queueItem.update({
+      where: { id: queueItem.id },
+      data: {
+        played: true,
+        isNextUp: false,
+        playedAt: new Date(),
+      } as any,
+    });
+
+    await this.promoteNextTrack(sessionId);
+
+    return queueItem;
   }
 
   async getNextTrack(sessionId: string) {
-    const queue = await this.getQueue(sessionId);
-    return queue[0] || null;
+    const { nextUp } = await this.getQueueWithNext(sessionId);
+    return nextUp;
   }
 
   async getQueueItemWithSession(queueItemId: string) {

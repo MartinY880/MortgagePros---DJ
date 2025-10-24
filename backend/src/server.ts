@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config';
 import { setupSocketHandlers } from './sockets/handlers';
+import { playbackService } from './services/playback.service';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -80,6 +81,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Setup Socket.IO handlers
 setupSocketHandlers(io);
+playbackService.setSocketServer(io);
 
 // Start server
 const PORT = config.server.port;

@@ -30,8 +30,8 @@ export function setupSocketHandlers(io: SocketIOServer) {
 
       // Send current queue to the new user
       try {
-        const queue = await queueService.getQueue(sessionId);
-        socket.emit('queue_updated', { queue });
+        const state = await queueService.getQueueWithNext(sessionId);
+        socket.emit('queue_updated', state);
       } catch (error) {
         console.error('Error fetching queue:', error);
       }
@@ -55,8 +55,11 @@ export function setupSocketHandlers(io: SocketIOServer) {
     });
 
     // Broadcast queue updates
-    socket.on('queue_updated', (data: { sessionId: string; queue: any[] }) => {
-      socket.to(data.sessionId).emit('queue_updated', { queue: data.queue });
+    socket.on('queue_updated', (data: { sessionId: string; queue: any[]; nextUp?: any }) => {
+      socket.to(data.sessionId).emit('queue_updated', {
+        queue: data.queue,
+        nextUp: data.nextUp ?? null,
+      });
     });
 
     // Broadcast vote updates
@@ -65,8 +68,8 @@ export function setupSocketHandlers(io: SocketIOServer) {
     });
 
     // Broadcast now playing
-    socket.on('now_playing', (data: { sessionId: string; track: any }) => {
-      io.to(data.sessionId).emit('now_playing', { track: data.track });
+    socket.on('now_playing', (data: { sessionId: string; playback: any }) => {
+      io.to(data.sessionId).emit('now_playing', { playback: data.playback ?? null });
     });
 
     // Handle disconnection
@@ -89,11 +92,16 @@ export function setupSocketHandlers(io: SocketIOServer) {
 }
 
 // Helper function to broadcast queue updates from the API
-export function broadcastQueueUpdate(io: SocketIOServer, sessionId: string, queue: any[]) {
-  io.to(sessionId).emit('queue_updated', { queue });
+export function broadcastQueueUpdate(io: SocketIOServer, sessionId: string, state: { nextUp: any; queue: any[] }) {
+  io.to(sessionId).emit('queue_updated', state);
 }
 
 // Helper function to broadcast vote updates from the API
 export function broadcastVoteUpdate(io: SocketIOServer, sessionId: string, queueItemId: string, voteScore: number) {
   io.to(sessionId).emit('vote_updated', { queueItemId, voteScore });
+}
+
+// Helper to broadcast playback updates from the API or services
+export function broadcastPlaybackUpdate(io: SocketIOServer, sessionId: string, playback: any) {
+  io.to(sessionId).emit('now_playing', { playback: playback ?? null });
 }
