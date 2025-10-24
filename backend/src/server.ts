@@ -16,6 +16,9 @@ import spotifyRoutes from './routes/spotify.routes';
 const app = express();
 const httpServer = createServer(app);
 
+// Trust Traefik proxy to preserve secure cookies and client IP
+app.set('trust proxy', 1);
+
 // Setup Socket.IO
 const io = new SocketIOServer(httpServer, {
   cors: {

@@ -59,7 +59,5 @@ docker-compose.yml
 **/tmp
 **/temp
 
-# Prisma migrations (migrations will be applied, not copied)
-# Keep schema.prisma
-backend/prisma/migrations
+# Prisma local database artifacts
 backend/prisma/dev.db*

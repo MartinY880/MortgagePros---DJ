@@ -2,47 +2,42 @@ version: '3.8'
 
 services:
   spotify-jukebox:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: spotify-jukebox:latest
-    container_name: spotify-jukebox
+    image: ghostreaper69/mtgprosdj:v0.0.11
+    container_name: dj
     restart: unless-stopped
     
     # Note: If using Traefik, you can comment out the ports section
     # Traefik will handle the routing
-    ports:
-      - "5000:5000"  # Backend API and WebSocket
-      - "5173:5173"  # Frontend
+    # ports:
+    #   - "5000:5000"  # Backend API and WebSocket
+    #   - "5173:5173"  # Frontend
     
     labels:
       # Enable Traefik
       - traefik.enable=true
       - traefik.docker.network=traefik
       
-      # Frontend router (main domain)
-      - traefik.http.routers.spotify-jukebox-frontend.rule=Host(`your-domain-here`)
-      - traefik.http.routers.spotify-jukebox-frontend.entrypoints=websecure
-      - traefik.http.routers.spotify-jukebox-frontend.tls.certresolver=letsencrypt
-      - traefik.http.routers.spotify-jukebox-frontend.service=spotify-jukebox-frontend
-      - traefik.http.services.spotify-jukebox-frontend.loadbalancer.server.port=5173
-      
-      # Backend router (API subdomain or path)
-      # Option 1: Using subdomain (api.your-domain-here)
-      - traefik.http.routers.spotify-jukebox-backend.rule=Host(`api.your-domain-here`)
-      # Option 2: Using path prefix (uncomment and comment above if preferred)
-      # - traefik.http.routers.spotify-jukebox-backend.rule=Host(`your-domain-here`) && PathPrefix(`/api`, `/socket.io`)
+      # Backend router - API subdomain
+      - traefik.http.routers.spotify-jukebox-backend.rule=Host(`api-dj.pros.mortgage`)
       - traefik.http.routers.spotify-jukebox-backend.entrypoints=websecure
       - traefik.http.routers.spotify-jukebox-backend.tls.certresolver=letsencrypt
       - traefik.http.routers.spotify-jukebox-backend.service=spotify-jukebox-backend
       - traefik.http.services.spotify-jukebox-backend.loadbalancer.server.port=5000
+      
+      # Frontend router - main domain
+      - traefik.http.routers.spotify-jukebox-frontend.rule=Host(`dj.pros.mortgage`)
+      - traefik.http.routers.spotify-jukebox-frontend.entrypoints=websecure
+      - traefik.http.routers.spotify-jukebox-frontend.tls.certresolver=letsencrypt
+      - traefik.http.routers.spotify-jukebox-frontend.service=spotify-jukebox-frontend
+      - traefik.http.routers.spotify-jukebox-frontend.priority=1
+      - traefik.http.services.spotify-jukebox-frontend.loadbalancer.server.port=5173
     
     environment:
       # Spotify API Credentials (REQUIRED)
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
       # Update this to your domain when using Traefik
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-https://api.your-domain-here/api/auth/callback}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-https://api-dj.pros.mortgage/api/auth/callback}
       
       # Server Configuration
       - PORT=5000
@@ -52,7 +47,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       
       # Frontend URL - Update this to your domain when using Traefik
-      - FRONTEND_URL=${FRONTEND_URL:-https://your-domain-here}
+      - FRONTEND_URL=${FRONTEND_URL:-https://dj.pros.mortgage}
       
       # Database
       - DATABASE_URL=file:/app/backend/data/prod.db

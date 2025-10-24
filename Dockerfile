@@ -39,6 +39,7 @@ COPY frontend/tsconfig*.json ./
 COPY frontend/vite.config.ts ./
 COPY frontend/tailwind.config.js ./
 COPY frontend/postcss.config.js ./
+COPY frontend/.env.production ./
 
 # Install dependencies
 RUN npm install
@@ -83,6 +84,7 @@ RUN addgroup -g 1001 -S nodejs && \
   chown -R nodejs:nodejs /app
 
 USER nodejs
+ENV NODE_ENV=production
 
 # Expose ports
 # 5000 - Backend API and WebSocket
