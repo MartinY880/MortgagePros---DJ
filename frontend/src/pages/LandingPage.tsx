@@ -1,4 +1,3 @@
-import { Music } from 'lucide-react';
 import { authApi } from '../services/api';
 
 export default function LandingPage() {
@@ -24,13 +23,15 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
         <div className="mb-8 flex justify-center">
-          <div className="bg-spotify-green p-6 rounded-full">
-            <Music size={64} className="text-white" />
-          </div>
+          <img 
+            src="https://mtgpros.com/wp-content/uploads/2023/04/MTGProsSiteLogo.webp" 
+            alt="MortgagePros Logo" 
+            className="h-24 w-auto"
+          />
         </div>
         
         <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-spotify-green to-green-400 bg-clip-text text-transparent">
-          Spotify Jukebox
+          MortgagePros Jukebox
         </h1>
         
         <p className="text-xl text-gray-300 mb-8">
