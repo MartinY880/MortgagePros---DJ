@@ -38,6 +38,7 @@ model Session {
   
   host        User      @relation("HostedSessions", fields: [hostId], references: [id], onDelete: Cascade)
   queueItems  QueueItem[]
+  guests      Guest[]
   
   @@index([code])
   @@index([hostId])
@@ -52,14 +53,16 @@ model QueueItem {
   trackAlbum      String?
   trackImage      String?
   trackDuration   Int
-  addedById       String
+  addedById       String?
+  addedByGuestId  String?
   voteScore       Int       @default(0)
   played          Boolean   @default(false)
   playedAt        DateTime?
   createdAt       DateTime  @default(now())
   
   session         Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  addedBy         User      @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  addedBy         User?     @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  addedByGuest    Guest?    @relation(fields: [addedByGuestId], references: [id], onDelete: Cascade)
   votes           Vote[]
   
   @@index([sessionId, played, voteScore])
@@ -69,14 +72,31 @@ model QueueItem {
 model Vote {
   id            String    @id @default(uuid())
   queueItemId   String
-  userId        String
+  userId        String?
+  guestId       String?
   voteType      Int       // 1 for upvote, -1 for downvote
   createdAt     DateTime  @default(now())
   
   queueItem     QueueItem @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guest         Guest?    @relation(fields: [guestId], references: [id], onDelete: Cascade)
   
   @@unique([queueItemId, userId])
+  @@unique([queueItemId, guestId])
   @@index([queueItemId])
   @@index([userId])
+  @@index([guestId])
+}
+
+model Guest {
+  id         String     @id @default(uuid())
+  sessionId  String
+  name       String
+  createdAt  DateTime   @default(now())
+
+  session    Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  queueItems QueueItem[]
+  votes      Vote[]
+
+  @@index([sessionId])
 }

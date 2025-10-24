@@ -28,7 +28,8 @@ export interface QueueItem {
   trackAlbum: string | null;
   trackImage: string | null;
   trackDuration: number;
-  addedById: string;
+  addedById?: string | null;
+  addedByGuestId?: string | null;
   voteScore: number;
   played: boolean;
   playedAt: string | null;
@@ -36,14 +37,25 @@ export interface QueueItem {
   addedBy?: {
     displayName: string;
   };
+  addedByGuest?: {
+    id: string;
+    name: string;
+  };
   votes?: Vote[];
 }
 
 export interface Vote {
   id: string;
   queueItemId: string;
-  userId: string;
+  userId?: string;
+  guestId?: string;
   voteType: number;
+}
+
+export interface SessionParticipant {
+  type: 'host' | 'guest' | 'none';
+  name?: string;
+  guestId?: string;
 }
 
 export interface SpotifyTrack {

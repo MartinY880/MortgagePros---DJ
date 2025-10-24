@@ -1,17 +1,42 @@
 import { Request, Response } from 'express';
 import { spotifyService } from '../services/spotify.service';
+import { sessionService } from '../services/session.service';
 
 export class SpotifyController {
   async search(req: Request, res: Response) {
     try {
-      const { q } = req.query;
-      const userId = req.session.userId!;
+  const { q, sessionId } = req.query;
 
       if (!q || typeof q !== 'string') {
         return res.status(400).json({ error: 'Search query is required' });
       }
 
-      const accessToken = await spotifyService.ensureValidToken(userId);
+      let tokenOwnerId: string | null = null;
+
+      if (sessionId && typeof sessionId === 'string') {
+        const session = await sessionService.getSession(sessionId);
+
+        if (!session || !session.isActive) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const isHost = req.session.userId === session.hostId;
+        const guestData = req.session.guestSessions?.[sessionId];
+
+        if (!isHost && !guestData) {
+          return res.status(401).json({ error: 'Join the session before searching' });
+        }
+
+        tokenOwnerId = session.hostId;
+      } else if (req.session.userId) {
+        tokenOwnerId = req.session.userId;
+      }
+
+      if (!tokenOwnerId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
       const tracks = await spotifyService.searchTracks(q, accessToken);
 
       res.json({ tracks });
@@ -23,8 +48,34 @@ export class SpotifyController {
 
   async getCurrentPlayback(req: Request, res: Response) {
     try {
-      const userId = req.session.userId!;
-      const accessToken = await spotifyService.ensureValidToken(userId);
+      const { sessionId } = req.query;
+
+      let tokenOwnerId: string | null = null;
+
+      if (sessionId && typeof sessionId === 'string') {
+        const session = await sessionService.getSession(sessionId);
+
+        if (!session || !session.isActive) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const isHost = req.session.userId === session.hostId;
+        const guestData = req.session.guestSessions?.[sessionId];
+
+        if (!isHost && !guestData) {
+          return res.status(401).json({ error: 'Join the session before viewing playback' });
+        }
+
+        tokenOwnerId = session.hostId;
+      } else if (req.session.userId) {
+        tokenOwnerId = req.session.userId;
+      }
+
+      if (!tokenOwnerId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
       const playback = await spotifyService.getCurrentPlayback(accessToken);
 
       res.json({ playback });

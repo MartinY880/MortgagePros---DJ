@@ -3,6 +3,23 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export class QueueService {
+  private includeRelations() {
+    return {
+      addedBy: {
+        select: {
+          displayName: true,
+        },
+      },
+      addedByGuest: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      votes: true,
+    };
+  }
+
   async addToQueue(
     sessionId: string,
     spotifyTrackId: string,
@@ -11,7 +28,7 @@ export class QueueService {
     trackAlbum: string | null,
     trackImage: string | null,
     trackDuration: number,
-    addedById: string
+    actor: { userId?: string; guestId?: string }
   ) {
     // Check for duplicates in unplayed queue
     const existing = await prisma.queueItem.findFirst({
@@ -26,25 +43,29 @@ export class QueueService {
       throw new Error('Track already in queue');
     }
 
-    const queueItem = await prisma.queueItem.create({
-      data: {
-        sessionId,
-        spotifyTrackId,
-        trackName,
-        trackArtist,
-        trackAlbum,
-        trackImage,
-        trackDuration,
-        addedById,
-      },
-      include: {
-        addedBy: {
-          select: {
-            displayName: true,
-          },
-        },
-        votes: true,
-      },
+    const queueModel = (prisma as any).queueItem;
+
+    const data: any = {
+      sessionId,
+      spotifyTrackId,
+      trackName,
+      trackArtist,
+      trackAlbum,
+      trackImage,
+      trackDuration,
+    };
+
+    if (actor.userId) {
+      data.addedById = actor.userId;
+    }
+
+    if (actor.guestId) {
+      data.addedByGuestId = actor.guestId;
+    }
+
+    const queueItem = await queueModel.create({
+      data,
+      include: this.includeRelations(),
     });
 
     return queueItem;
@@ -56,14 +77,7 @@ export class QueueService {
         sessionId,
         played: false,
       },
-      include: {
-        addedBy: {
-          select: {
-            displayName: true,
-          },
-        },
-        votes: true,
-      },
+      include: this.includeRelations(),
       orderBy: [
         { voteScore: 'desc' },
         { createdAt: 'asc' },
@@ -73,20 +87,27 @@ export class QueueService {
     return queue;
   }
 
-  async removeFromQueue(queueItemId: string, userId: string) {
+  async removeFromQueue(
+    queueItemId: string,
+    actor: { userId?: string; guestId?: string }
+  ) {
     const queueItem = await prisma.queueItem.findUnique({
       where: { id: queueItemId },
       include: {
         session: true,
       },
-    });
+    }) as any;
 
     if (!queueItem) {
       throw new Error('Queue item not found');
     }
 
     // Only host or person who added it can remove
-    if (queueItem.addedById !== userId && queueItem.session.hostId !== userId) {
+    const isHost = actor.userId && queueItem.session.hostId === actor.userId;
+    const isOwner = (actor.userId && queueItem.addedById === actor.userId) ||
+      (actor.guestId && queueItem.addedByGuestId === actor.guestId);
+
+    if (!isHost && !isOwner) {
       throw new Error('Not authorized to remove this track');
     }
 
@@ -95,47 +116,98 @@ export class QueueService {
     });
   }
 
-  async vote(queueItemId: string, userId: string, voteType: number) {
-    // Check if user already voted
-    const existingVote = await prisma.vote.findUnique({
-      where: {
-        queueItemId_userId: {
-          queueItemId,
-          userId,
-        },
-      },
-    });
+  async vote(
+    queueItemId: string,
+    actor: { userId?: string; guestId?: string },
+    voteType: number
+  ) {
+    if (!actor.userId && !actor.guestId) {
+      throw new Error('Not authorized to vote');
+    }
 
-    if (existingVote) {
-      if (existingVote.voteType === voteType) {
-        // Remove vote (toggle off)
-        await prisma.vote.delete({
-          where: { id: existingVote.id },
-        });
-        await this.updateVoteScore(queueItemId);
-        return { action: 'removed', voteType };
-      } else {
-        // Change vote
-        await prisma.vote.update({
+    const voteModel = (prisma as any).vote;
+
+    if (actor.userId) {
+      const existingVote = await voteModel.findUnique({
+        where: {
+          queueItemId_userId: {
+            queueItemId,
+            userId: actor.userId,
+          },
+        },
+      });
+
+      if (existingVote) {
+        if (existingVote.voteType === voteType) {
+          await voteModel.delete({
+            where: { id: existingVote.id },
+          });
+          await this.updateVoteScore(queueItemId);
+          const voteScore = await this.getVoteScore(queueItemId);
+          return { action: 'removed', voteType, voteScore };
+        }
+
+        await voteModel.update({
           where: { id: existingVote.id },
           data: { voteType },
         });
         await this.updateVoteScore(queueItemId);
-        return { action: 'changed', voteType };
+        const voteScore = await this.getVoteScore(queueItemId);
+        return { action: 'changed', voteType, voteScore };
       }
+
+      await voteModel.create({
+        data: {
+          queueItemId,
+          userId: actor.userId,
+          voteType,
+        },
+      });
+
+      await this.updateVoteScore(queueItemId);
+      const voteScore = await this.getVoteScore(queueItemId);
+      return { action: 'added', voteType, voteScore };
     }
 
-    // Create new vote
-    await prisma.vote.create({
+    const existingGuestVote = await voteModel.findUnique({
+      where: {
+        queueItemId_guestId: {
+          queueItemId,
+          guestId: actor.guestId!,
+        },
+      },
+    });
+
+    if (existingGuestVote) {
+      if (existingGuestVote.voteType === voteType) {
+        await voteModel.delete({
+          where: { id: existingGuestVote.id },
+        });
+        await this.updateVoteScore(queueItemId);
+        const voteScore = await this.getVoteScore(queueItemId);
+        return { action: 'removed', voteType, voteScore };
+      }
+
+      await voteModel.update({
+        where: { id: existingGuestVote.id },
+        data: { voteType },
+      });
+      await this.updateVoteScore(queueItemId);
+      const voteScore = await this.getVoteScore(queueItemId);
+      return { action: 'changed', voteType, voteScore };
+    }
+
+    await voteModel.create({
       data: {
         queueItemId,
-        userId,
+        guestId: actor.guestId!,
         voteType,
       },
     });
 
     await this.updateVoteScore(queueItemId);
-    return { action: 'added', voteType };
+    const voteScore = await this.getVoteScore(queueItemId);
+    return { action: 'added', voteType, voteScore };
   }
 
   private async updateVoteScore(queueItemId: string) {
@@ -151,6 +223,15 @@ export class QueueService {
     });
   }
 
+  private async getVoteScore(queueItemId: string) {
+    const queueItem = await prisma.queueItem.findUnique({
+      where: { id: queueItemId },
+      select: { voteScore: true },
+    });
+
+    return queueItem?.voteScore ?? 0;
+  }
+
   async markAsPlayed(queueItemId: string) {
     await prisma.queueItem.update({
       where: { id: queueItemId },
@@ -164,6 +245,15 @@ export class QueueService {
   async getNextTrack(sessionId: string) {
     const queue = await this.getQueue(sessionId);
     return queue[0] || null;
+  }
+
+  async getQueueItemWithSession(queueItemId: string) {
+    return prisma.queueItem.findUnique({
+      where: { id: queueItemId },
+      include: {
+        session: true,
+      },
+    });
   }
 }
 

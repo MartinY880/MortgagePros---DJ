@@ -6,6 +6,10 @@ const prisma = new PrismaClient();
 declare module 'express-session' {
   interface SessionData {
     userId?: string;
+    guestSessions?: Record<string, {
+      guestId: string;
+      name: string;
+    }>;
   }
 }
 

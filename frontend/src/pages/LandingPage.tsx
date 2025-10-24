@@ -1,6 +1,15 @@
-import { authApi } from '../services/api';
+import { ChangeEvent, KeyboardEvent, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authApi, guestApi } from '../services/api';
+import { Session } from '../types';
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+  const [joinCode, setJoinCode] = useState('');
+  const [guestName, setGuestName] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
   const handleLogin = async () => {
     try {
       const response = await authApi.getAuthUrl();
@@ -16,6 +25,29 @@ export default function LandingPage() {
       console.error('Login error:', error);
       const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
       alert(`Failed to connect: ${errorMsg}\n\nMake sure the backend server is running and accessible.`);
+    }
+  };
+
+  const handleGuestJoin = async () => {
+    if (joinCode.trim().length !== 6 || !guestName.trim()) {
+      return;
+    }
+
+    setJoining(true);
+    setJoinError(null);
+
+    try {
+      const response = await guestApi.joinByCode(joinCode.toUpperCase(), guestName.trim());
+      const session: Session = response.data.session;
+      setGuestName('');
+      setJoinCode('');
+      navigate(`/session/${session.id}`);
+    } catch (error: any) {
+      console.error('Guest join error:', error);
+      const message = error?.response?.data?.error || 'Failed to join session. Check the code and try again.';
+      setJoinError(message);
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -49,6 +81,60 @@ export default function LandingPage() {
           <p className="text-sm text-gray-400">
             Spotify Premium required for playback control
           </p>
+        </div>
+
+        <div className="mt-10 bg-spotify-gray bg-opacity-60 border border-spotify-gray/60 rounded-2xl p-6 text-left">
+          <h2 className="text-2xl font-bold text-white mb-2">Join a Session as a Guest</h2>
+          <p className="text-gray-300 text-sm mb-4">
+            Have a session code? Enter it below, choose a display name, and start adding songs without logging into Spotify.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-gray-400 text-sm mb-2" htmlFor="join-code">Session Code</label>
+              <input
+                id="join-code"
+                type="text"
+                value={joinCode}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  setJoinCode(e.target.value.toUpperCase());
+                  setJoinError(null);
+                }}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
+                maxLength={6}
+                placeholder="ABC123"
+                className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green uppercase tracking-widest text-center font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-sm mb-2" htmlFor="guest-name">Your Name</label>
+              <input
+                id="guest-name"
+                type="text"
+                value={guestName}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  setGuestName(e.target.value);
+                  setJoinError(null);
+                }}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
+                placeholder="DJ Jazzy"
+                className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              />
+            </div>
+          </div>
+
+          {joinError && (
+            <div className="text-red-400 text-sm mt-3">{joinError}</div>
+          )}
+
+          <button
+            onClick={handleGuestJoin}
+            disabled={joinCode.length !== 6 || !guestName.trim() || joining}
+            className="w-full mt-4 bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+          >
+            {joining ? 'Joining...' : 'Join Session'}
+          </button>
         </div>
         
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">

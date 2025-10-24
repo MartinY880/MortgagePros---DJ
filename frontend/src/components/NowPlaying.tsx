@@ -4,29 +4,40 @@ import { spotifyApi } from '../services/api';
 
 interface NowPlayingProps {
   sessionId: string;
+  canControl?: boolean;
 }
 
-export default function NowPlaying({ sessionId: _sessionId }: NowPlayingProps) {
+export default function NowPlaying({ sessionId: _sessionId, canControl = false }: NowPlayingProps) {
   const [playback, setPlayback] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPlayback();
     const interval = setInterval(fetchPlayback, 5000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_sessionId]);
 
   const fetchPlayback = async () => {
     try {
-      const response = await spotifyApi.getPlayback();
+      const response = await spotifyApi.getPlayback(_sessionId);
       setPlayback(response.data.playback);
       setIsPlaying(response.data.playback?.is_playing || false);
+      setError(null);
     } catch (error) {
-      // Silently handle - user might not have active playback
+      const status = (error as any)?.response?.status;
+      if (status === 401 || status === 403) {
+        setError('Join the session to view playback');
+      } else {
+        setError('Playback data unavailable');
+      }
     }
   };
 
   const handlePlayPause = async () => {
+    if (!canControl) return;
+
     try {
       if (isPlaying) {
         await spotifyApi.pause();
@@ -41,6 +52,8 @@ export default function NowPlaying({ sessionId: _sessionId }: NowPlayingProps) {
   };
 
   const handleNext = async () => {
+    if (!canControl) return;
+
     try {
       await spotifyApi.next();
       setTimeout(fetchPlayback, 1000);
@@ -48,6 +61,14 @@ export default function NowPlaying({ sessionId: _sessionId }: NowPlayingProps) {
       console.error('Skip error:', error);
     }
   };
+
+  if (error) {
+    return (
+      <div className="bg-spotify-gray p-6 rounded-lg text-center">
+        <p className="text-gray-400">{error}</p>
+      </div>
+    );
+  }
 
   if (!playback?.item) {
     return (
@@ -81,21 +102,23 @@ export default function NowPlaying({ sessionId: _sessionId }: NowPlayingProps) {
           <p className="text-sm text-gray-400">{playback.item.album?.name}</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handlePlayPause}
-            className="bg-spotify-green hover:bg-green-500 text-white p-4 rounded-full transition transform hover:scale-105"
-          >
-            {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-          </button>
-          
-          <button
-            onClick={handleNext}
-            className="bg-spotify-gray hover:bg-gray-600 text-white p-4 rounded-full transition"
-          >
-            <SkipForward size={24} />
-          </button>
-        </div>
+        {canControl && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePlayPause}
+              className="bg-spotify-green hover:bg-green-500 text-white p-4 rounded-full transition transform hover:scale-105"
+            >
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </button>
+            
+            <button
+              onClick={handleNext}
+              className="bg-spotify-gray hover:bg-gray-600 text-white p-4 rounded-full transition"
+            >
+              <SkipForward size={24} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

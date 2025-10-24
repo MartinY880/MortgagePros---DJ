@@ -83,6 +83,42 @@ export class SessionService {
       data: { isActive: false },
     });
   }
+
+  async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string) {
+    const guestModel = (prisma as any).guest;
+
+    if (guestId) {
+      const existingGuest = await guestModel.findUnique({
+        where: { id: guestId },
+      });
+
+      if (existingGuest && existingGuest.sessionId === sessionId) {
+        if (existingGuest.name === name) {
+          return existingGuest;
+        }
+
+        return guestModel.update({
+          where: { id: guestId },
+          data: { name },
+        });
+      }
+    }
+
+    return guestModel.create({
+      data: {
+        sessionId,
+        name,
+      },
+    });
+  }
+
+  async getGuestById(guestId: string) {
+    const guestModel = (prisma as any).guest;
+
+    return guestModel.findUnique({
+      where: { id: guestId },
+    });
+  }
 }
 
 export const sessionService = new SessionService();

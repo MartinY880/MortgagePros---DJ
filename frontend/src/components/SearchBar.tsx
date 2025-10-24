@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ChangeEvent, KeyboardEvent, useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { spotifyApi, queueApi } from '../services/api';
 import { SpotifyTrack } from '../types';
@@ -6,9 +6,11 @@ import { SpotifyTrack } from '../types';
 interface SearchBarProps {
   sessionId: string;
   onTrackAdded: () => void;
+  canSearch: boolean;
+  onRequireAccess: () => void;
 }
 
-export default function SearchBar({ sessionId, onTrackAdded }: SearchBarProps) {
+export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SpotifyTrack[]>([]);
   const [searching, setSearching] = useState(false);
@@ -17,19 +19,33 @@ export default function SearchBar({ sessionId, onTrackAdded }: SearchBarProps) {
   const handleSearch = async () => {
     if (!query.trim()) return;
 
+    if (!canSearch) {
+      onRequireAccess();
+      return;
+    }
+
     setSearching(true);
     try {
-      const response = await spotifyApi.search(query);
+      const response = await spotifyApi.search(sessionId, query);
       setResults(response.data.tracks || []);
       setShowResults(true);
     } catch (error) {
       console.error('Search error:', error);
+      const status = (error as any)?.response?.status;
+      if (status === 401 || status === 403) {
+        onRequireAccess();
+      }
     } finally {
       setSearching(false);
     }
   };
 
   const handleAddTrack = async (trackId: string) => {
+    if (!canSearch) {
+      onRequireAccess();
+      return;
+    }
+
     try {
       await queueApi.add(sessionId, trackId);
       onTrackAdded();
@@ -38,6 +54,11 @@ export default function SearchBar({ sessionId, onTrackAdded }: SearchBarProps) {
       setResults([]);
     } catch (error: any) {
       console.error('Add track error:', error);
+      const status = error?.response?.status;
+      if (status === 401 || status === 403) {
+        onRequireAccess();
+        return;
+      }
       alert(error.response?.data?.error || 'Failed to add track');
     }
   };
@@ -58,14 +79,14 @@ export default function SearchBar({ sessionId, onTrackAdded }: SearchBarProps) {
               type="text"
               placeholder="Search for songs..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+              onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleSearch()}
               className="w-full bg-spotify-black text-white pl-10 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
             />
           </div>
           <button
             onClick={handleSearch}
-            disabled={!query.trim() || searching}
+            disabled={!query.trim() || searching || !canSearch}
             className="bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 rounded-lg transition font-semibold"
           >
             {searching ? 'Searching...' : 'Search'}
@@ -82,7 +103,7 @@ export default function SearchBar({ sessionId, onTrackAdded }: SearchBarProps) {
             </div>
           ) : (
             <div className="p-2">
-              {results.map((track) => (
+              {results.map((track: SpotifyTrack) => (
                 <div
                   key={track.id}
                   className="flex items-center gap-3 p-3 hover:bg-spotify-black rounded-lg transition cursor-pointer"

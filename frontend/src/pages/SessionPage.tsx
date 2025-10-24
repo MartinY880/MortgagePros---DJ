@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { ChangeEvent, KeyboardEvent, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, Check } from 'lucide-react';
-import { sessionApi, queueApi } from '../services/api';
+import { sessionApi, queueApi, guestApi } from '../services/api';
 import { socketService } from '../services/socket';
-import { Session, QueueItem } from '../types';
+import { Session, QueueItem, SessionParticipant } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
@@ -15,12 +15,18 @@ export default function SessionPage() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [participant, setParticipant] = useState<SessionParticipant | null>(null);
+  const [showGuestModal, setShowGuestModal] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [joiningGuest, setJoiningGuest] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
 
     fetchSession();
     fetchQueue();
+    fetchParticipant();
 
     // Connect to socket
     socketService.connect();
@@ -58,6 +64,46 @@ export default function SessionPage() {
     }
   };
 
+  const fetchParticipant = async () => {
+    if (!sessionId) return;
+
+    try {
+      const response = await sessionApi.getParticipant(sessionId);
+      const participantInfo: SessionParticipant = response.data.participant;
+      setParticipant(participantInfo);
+      setShowGuestModal(participantInfo.type === 'none');
+    } catch (error) {
+      console.error('Failed to fetch participant info:', error);
+      setParticipant({ type: 'none' });
+      setShowGuestModal(true);
+    }
+  };
+
+  const handleGuestJoin = async () => {
+    if (!guestName.trim() || !sessionId) return;
+
+    setJoiningGuest(true);
+    setJoinError(null);
+
+    try {
+      await guestApi.joinById(sessionId, guestName.trim());
+      await Promise.all([fetchParticipant(), fetchQueue()]);
+      setGuestName('');
+      setShowGuestModal(false);
+    } catch (error: any) {
+      console.error('Guest join error:', error);
+      const message = error?.response?.data?.error || 'Failed to join session. Please try again.';
+      setJoinError(message);
+    } finally {
+      setJoiningGuest(false);
+    }
+  };
+
+  const handleRequireAccess = () => {
+    setJoinError(null);
+    setShowGuestModal(true);
+  };
+
   const handleCopyCode = () => {
     if (session) {
       navigator.clipboard.writeText(session.code);
@@ -80,6 +126,35 @@ export default function SessionPage() {
 
   return (
     <div className="min-h-screen bg-spotify-dark">
+      {showGuestModal && participant?.type !== 'host' && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-spotify-gray rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold text-white mb-4">Join {session.name}</h2>
+            <p className="text-gray-300 text-sm mb-4">
+              Enter your name to join the party and start adding songs.
+            </p>
+            <input
+              type="text"
+              placeholder="Your name"
+              value={guestName}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setGuestName(e.target.value)}
+              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
+              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-spotify-green"
+            />
+            {joinError && (
+              <div className="text-red-400 text-sm mb-2">{joinError}</div>
+            )}
+            <button
+              onClick={handleGuestJoin}
+              disabled={!guestName.trim() || joiningGuest}
+              className="w-full bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+            >
+              {joiningGuest ? 'Joining...' : 'Join Party'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-spotify-black border-b border-spotify-gray p-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
@@ -117,9 +192,20 @@ export default function SessionPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Queue Section */}
           <div className="lg:col-span-2 space-y-6">
-            <NowPlaying sessionId={sessionId!} />
-            <SearchBar sessionId={sessionId!} onTrackAdded={fetchQueue} />
-            <QueueList queue={queue} sessionId={sessionId!} onQueueUpdate={fetchQueue} />
+            <NowPlaying sessionId={sessionId!} canControl={participant?.type === 'host'} />
+            <SearchBar
+              sessionId={sessionId!}
+              onTrackAdded={fetchQueue}
+              canSearch={participant?.type === 'host' || participant?.type === 'guest'}
+              onRequireAccess={handleRequireAccess}
+            />
+            <QueueList
+              queue={queue}
+              sessionId={sessionId!}
+              onQueueUpdate={fetchQueue}
+              participant={participant}
+              onRequireAccess={handleRequireAccess}
+            />
           </div>
 
           {/* Sidebar */}

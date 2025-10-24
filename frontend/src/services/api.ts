@@ -15,6 +15,7 @@ export const sessionApi = {
   create: (name: string) => api.post('/sessions', { name }),
   getById: (id: string) => api.get(`/sessions/${id}`),
   getByCode: (code: string) => api.get(`/sessions/code/${code}`),
+  getParticipant: (id: string) => api.get(`/sessions/${id}/participant`),
   delete: (id: string) => api.delete(`/sessions/${id}`),
 };
 
@@ -28,11 +29,19 @@ export const queueApi = {
 };
 
 export const spotifyApi = {
-  search: (query: string) => api.get(`/spotify/search?q=${encodeURIComponent(query)}`),
-  getPlayback: () => api.get('/spotify/playback'),
+  search: (sessionId: string, query: string) =>
+    api.get(`/spotify/search?q=${encodeURIComponent(query)}&sessionId=${sessionId}`),
+  getPlayback: (sessionId: string) => api.get(`/spotify/playback?sessionId=${sessionId}`),
   play: () => api.post('/spotify/play'),
   pause: () => api.post('/spotify/pause'),
   next: () => api.post('/spotify/next'),
+};
+
+export const guestApi = {
+  joinByCode: (code: string, name: string) =>
+    api.post(`/sessions/code/${code}/join`, { name }),
+  joinById: (sessionId: string, name: string) =>
+    api.post(`/sessions/${sessionId}/join`, { name }),
 };
 
 export default api;
