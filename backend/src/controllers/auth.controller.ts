@@ -36,7 +36,7 @@ export class AuthController {
       const user = await prisma.user.upsert({
         where: { spotifyId: spotifyUser.id },
         update: {
-          displayName: spotifyUser.display_name,
+          displayName: spotifyUser.display_name || 'Unknown User',
           email: spotifyUser.email,
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
@@ -44,7 +44,7 @@ export class AuthController {
         },
         create: {
           spotifyId: spotifyUser.id,
-          displayName: spotifyUser.display_name,
+          displayName: spotifyUser.display_name || 'Unknown User',
           email: spotifyUser.email,
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,

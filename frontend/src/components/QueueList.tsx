@@ -1,5 +1,5 @@
 import { ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
-import { queueApi, authApi } from '../services/api';
+import { queueApi } from '../services/api';
 import { QueueItem } from '../types';
 
 interface QueueListProps {
@@ -8,7 +8,7 @@ interface QueueListProps {
   onQueueUpdate: () => void;
 }
 
-export default function QueueList({ queue, sessionId, onQueueUpdate }: QueueListProps) {
+export default function QueueList({ queue, sessionId: _sessionId, onQueueUpdate }: QueueListProps) {
   const handleVote = async (queueItemId: string, voteType: number) => {
     try {
       await queueApi.vote(queueItemId, voteType);
