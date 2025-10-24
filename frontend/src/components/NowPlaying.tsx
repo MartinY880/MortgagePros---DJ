@@ -6,7 +6,7 @@ interface NowPlayingProps {
   sessionId: string;
 }
 
-export default function NowPlaying({ sessionId }: NowPlayingProps) {
+export default function NowPlaying({ sessionId: _sessionId }: NowPlayingProps) {
   const [playback, setPlayback] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
