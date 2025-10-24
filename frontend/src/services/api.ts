@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api-dj.pros.mortgage/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
 });
 
