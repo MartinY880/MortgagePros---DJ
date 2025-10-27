@@ -48,6 +48,19 @@ export class QueueService {
     });
   }
 
+  async getMostRecentQueueItemForTrack(sessionId: string, spotifyTrackId: string) {
+    return prisma.queueItem.findFirst({
+      where: {
+        sessionId,
+        spotifyTrackId,
+      },
+      include: this.includeRelations(),
+      orderBy: [
+        { createdAt: 'desc' },
+      ],
+    });
+  }
+
   private async promoteNextTrack(sessionId: string) {
     const existing = await this.getCurrentNextUp(sessionId);
 

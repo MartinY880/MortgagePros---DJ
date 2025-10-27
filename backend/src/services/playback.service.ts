@@ -20,6 +20,37 @@ class PlaybackService {
   private io: SocketIOServer | null = null;
   private monitors = new Map<string, MonitorState>();
 
+  private async resolveRequester(sessionId: string, spotifyTrackId?: string | null) {
+    if (!spotifyTrackId) {
+      return null;
+    }
+
+    const queueItem = await queueService.getMostRecentQueueItemForTrack(sessionId, spotifyTrackId);
+
+    if (!queueItem) {
+      return null;
+    }
+
+    if (queueItem.addedBy) {
+      return {
+        type: 'host' as const,
+        name: queueItem.addedBy.displayName,
+      };
+    }
+
+    if (queueItem.addedByGuest) {
+      return {
+        type: 'guest' as const,
+        name: queueItem.addedByGuest.name,
+      };
+    }
+
+    return {
+      type: 'unknown' as const,
+      name: 'Unknown',
+    };
+  }
+
   setSocketServer(io: SocketIOServer) {
     this.io = io;
   }
@@ -134,6 +165,7 @@ class PlaybackService {
 
       let queueState = await queueService.getQueueWithNext(sessionId);
       let nextDelay = DEFAULT_IDLE_POLL_MS;
+      const requester = await this.resolveRequester(sessionId, playback?.item?.id);
 
       if (playback?.item?.id) {
         const currentTrackId: string = playback.item.id;
@@ -144,12 +176,18 @@ class PlaybackService {
           queueState = await queueService.getQueueWithNext(sessionId);
           nextDelay = POST_TRACK_END_DELAY_MS;
         }
-        broadcastPlaybackUpdate(this.io, sessionId, playback);
+        broadcastPlaybackUpdate(this.io, sessionId, {
+          playback,
+          requester,
+        });
       } else {
         if (!queueState.nextUp) {
           monitor.lastQueuedItemId = null;
         }
-        broadcastPlaybackUpdate(this.io, sessionId, playback ?? null);
+        broadcastPlaybackUpdate(this.io, sessionId, {
+          playback: playback ?? null,
+          requester: null,
+        });
         nextDelay = POST_TRACK_END_DELAY_MS;
       }
 
@@ -179,7 +217,7 @@ class PlaybackService {
         }
       }
 
-      this.schedulePoll(sessionId, nextDelay);
+  this.schedulePoll(sessionId, nextDelay);
     } catch (error: any) {
       if (error?.statusCode === 429) {
         const retryHeader = error.headers?.['retry-after'] ?? error.headers?.['Retry-After'];

@@ -82,3 +82,8 @@ export interface PlaybackState {
   item?: SpotifyTrack;
   progress_ms: number;
 }
+
+export interface PlaybackRequester {
+  type: 'host' | 'guest' | 'unknown';
+  name: string;
+}

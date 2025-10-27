@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
 import { guestApi } from '../services/api';
 import { socketService } from '../services/socket';
-import { Session, SessionParticipant, QueueState, PlaybackState } from '../types';
+import { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
@@ -44,11 +44,12 @@ export default function SessionPage() {
     data: playbackData,
     error: playbackFetchError,
     mutate: mutatePlayback,
-  } = useApiSWR<{ playback: PlaybackState | null }>(
+  } = useApiSWR<{ playback: PlaybackState | null; requester: PlaybackRequester | null }>(
     sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
     { shouldRetryOnError: false }
   );
   const playback = playbackData?.playback ?? null;
+  const playbackRequester = playbackData?.requester ?? null;
 
   const {
     data: participantData,
@@ -116,7 +117,10 @@ export default function SessionPage() {
     });
 
     const playbackCleanup = socketService.onNowPlaying((data) => {
-      void mutatePlayback({ playback: data.playback ?? null }, false);
+      void mutatePlayback({
+        playback: data.playback ?? null,
+        requester: data.requester ?? null,
+      }, false);
       setPlaybackError(null);
     });
 
@@ -199,9 +203,12 @@ export default function SessionPage() {
   };
 
   const updatePlayback = (updater: (current: PlaybackState | null) => PlaybackState | null) => {
-    void mutatePlayback((previous: { playback: PlaybackState | null } | undefined) => {
+    void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null } | undefined) => {
       const current = previous?.playback ?? null;
-      return { playback: updater(current) };
+      return {
+        playback: updater(current),
+        requester: previous?.requester ?? null,
+      };
     }, false);
   };
 
@@ -289,6 +296,7 @@ export default function SessionPage() {
               canControl={participant?.type === 'host'}
               sessionId={session.id}
               playback={playback}
+              requester={playbackRequester}
               error={playbackError}
               setError={setPlaybackError}
               onRefresh={refreshPlayback}

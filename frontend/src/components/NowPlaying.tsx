@@ -1,12 +1,13 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Play, Pause, SkipForward } from 'lucide-react';
 import { spotifyApi } from '../services/api';
-import { PlaybackState } from '../types';
+import { PlaybackRequester, PlaybackState } from '../types';
 
 interface NowPlayingProps {
   canControl?: boolean;
   sessionId?: string;
   playback: PlaybackState | null;
+  requester?: PlaybackRequester | null;
   error: string | null;
   setError: Dispatch<SetStateAction<string | null>>;
   onRefresh: () => Promise<void>;
@@ -17,6 +18,7 @@ export default function NowPlaying({
   canControl = false,
   sessionId,
   playback,
+  requester = null,
   error,
   setError,
   onRefresh,
@@ -97,6 +99,12 @@ export default function NowPlaying({
             {playback.item.artists?.map((a: any) => a.name).join(', ')}
           </p>
           <p className="text-sm text-gray-400">{playback.item.album?.name}</p>
+          {requester?.name && (
+            <p className="text-xs text-gray-500 mt-1">
+              Requested by {requester.name}
+              {requester.type === 'guest' ? ' (guest)' : requester.type === 'host' ? ' (host)' : ''}
+            </p>
+          )}
         </div>
 
         {canControl && (

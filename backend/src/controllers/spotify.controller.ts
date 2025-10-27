@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
 import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
+import { queueService } from '../services/queue.service';
 
 export class SpotifyController {
   async search(req: Request, res: Response) {
@@ -85,7 +86,23 @@ export class SpotifyController {
       const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
       const playback = await spotifyService.getCurrentPlayback(accessToken);
 
-      res.json({ playback });
+      let requester: { type: 'host' | 'guest' | 'unknown'; name: string } | null = null;
+
+      const resolvedSessionId = typeof sessionId === 'string' ? sessionId : null;
+
+      if (resolvedSessionId && playback?.item?.id) {
+        const queueItem = await queueService.getMostRecentQueueItemForTrack(resolvedSessionId, playback.item.id);
+
+        if (queueItem?.addedBy) {
+          requester = { type: 'host', name: queueItem.addedBy.displayName };
+        } else if (queueItem?.addedByGuest) {
+          requester = { type: 'guest', name: queueItem.addedByGuest.name };
+        } else if (queueItem) {
+          requester = { type: 'unknown', name: 'Unknown' };
+        }
+      }
+
+      res.json({ playback, requester });
     } catch (error) {
       console.error('Get playback error:', error);
       res.status(500).json({ error: 'Failed to get playback state' });
