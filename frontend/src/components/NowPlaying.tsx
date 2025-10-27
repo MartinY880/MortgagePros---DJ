@@ -101,7 +101,7 @@ export default function NowPlaying({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePlayPause}
-              className="bg-spotify-green hover:bg-green-500 text-white p-4 rounded-full transition transform hover:scale-105"
+              className="bg-spotify-green hover:bg-spotify-hover text-white p-4 rounded-full transition transform hover:scale-105"
             >
               {isPlaying ? <Pause size={24} /> : <Play size={24} />}
             </button>

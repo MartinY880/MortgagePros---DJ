@@ -62,8 +62,8 @@ export default function LandingPage() {
           />
         </div>
         
-        <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-spotify-green to-green-400 bg-clip-text text-transparent">
-          MortgagePros Jukebox
+        <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-spotify-green to-spotify-hover bg-clip-text text-transparent">
+          MTGPros DJ
         </h1>
         
         <p className="text-xl text-gray-300 mb-8">
@@ -73,7 +73,7 @@ export default function LandingPage() {
         <div className="space-y-4">
           <button
             onClick={handleLogin}
-            className="bg-spotify-green hover:bg-green-500 text-white font-bold py-4 px-8 rounded-full text-lg transition-all transform hover:scale-105 shadow-lg"
+            className="bg-spotify-green hover:bg-spotify-hover text-white font-bold py-4 px-8 rounded-full text-lg transition-all transform hover:scale-105 shadow-lg"
           >
             Connect with Spotify
           </button>
@@ -131,7 +131,7 @@ export default function LandingPage() {
           <button
             onClick={handleGuestJoin}
             disabled={joinCode.length !== 6 || !guestName.trim() || joining}
-            className="w-full mt-4 bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+            className="w-full mt-4 bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
           >
             {joining ? 'Joining...' : 'Join Session'}
           </button>

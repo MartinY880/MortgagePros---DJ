@@ -8,7 +8,8 @@ export default {
     extend: {
       colors: {
         spotify: {
-          green: '#1DB954',
+          green: '#3165c3',
+          hover: '#777b83',
           black: '#191414',
           dark: '#121212',
           gray: '#282828',

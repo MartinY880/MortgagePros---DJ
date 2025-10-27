@@ -8,6 +8,7 @@ interface MonitorState {
   interval: NodeJS.Timeout;
   processing: boolean;
   lastQueuedItemId: string | null;
+  pauseUntil: number | null;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -39,6 +40,7 @@ class PlaybackService {
       interval,
       processing: false,
       lastQueuedItemId: null,
+      pauseUntil: null,
     });
   }
 
@@ -64,6 +66,13 @@ class PlaybackService {
 
     if (!monitor || monitor.processing) {
       return;
+    }
+
+    if (monitor.pauseUntil) {
+      if (Date.now() < monitor.pauseUntil) {
+        return;
+      }
+      monitor.pauseUntil = null;
     }
 
     if (!this.io) {
@@ -109,8 +118,16 @@ class PlaybackService {
       }
 
       broadcastQueueUpdate(this.io, sessionId, queueState);
-    } catch (error) {
-      console.error(`Playback sync error for session ${sessionId}:`, error);
+    } catch (error: any) {
+      if (error?.statusCode === 429) {
+        const retryHeader = error.headers?.['retry-after'] ?? error.headers?.['Retry-After'];
+        const retrySeconds = Number.parseInt(retryHeader, 10);
+        const delaySeconds = Number.isFinite(retrySeconds) && retrySeconds > 0 ? retrySeconds : 60;
+        monitor.pauseUntil = Date.now() + delaySeconds * 1000;
+        console.warn(`Spotify rate limited session ${sessionId}. Pausing playback sync for ${delaySeconds} seconds.`);
+      } else {
+        console.error(`Playback sync error for session ${sessionId}:`, error);
+      }
     } finally {
       monitor.processing = false;
     }

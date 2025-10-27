@@ -72,6 +72,14 @@ export function setupSocketHandlers(io: SocketIOServer) {
       io.to(data.sessionId).emit('now_playing', { playback: data.playback ?? null });
     });
 
+    // Host keep-alive to prevent idle disconnects
+    socket.on('host_keep_alive', (data: { sessionId: string }) => {
+      if (data?.sessionId) {
+        socket.join(data.sessionId);
+        socket.emit('host_keep_alive_ack', { ts: Date.now() });
+      }
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);

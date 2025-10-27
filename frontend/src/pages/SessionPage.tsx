@@ -1,6 +1,6 @@
 import { ChangeEvent, KeyboardEvent, useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
 import { sessionApi, queueApi, guestApi, spotifyApi } from '../services/api';
 import { socketService } from '../services/socket';
 import { Session, SessionParticipant, QueueState, PlaybackState } from '../types';
@@ -17,6 +17,7 @@ export default function SessionPage() {
   const [playback, setPlayback] = useState<PlaybackState | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [participant, setParticipant] = useState<SessionParticipant | null>(null);
   const [showGuestModal, setShowGuestModal] = useState(false);
@@ -67,6 +68,20 @@ export default function SessionPage() {
       setPlayback(null);
     }
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    if (participant?.type !== 'host') return;
+
+    const KEEP_ALIVE_INTERVAL_MS = 60000;
+
+    const keepAliveInterval = setInterval(() => {
+      void fetchPlayback();
+      socketService.getSocket()?.emit('host_keep_alive', { sessionId });
+    }, KEEP_ALIVE_INTERVAL_MS);
+
+    return () => clearInterval(keepAliveInterval);
+  }, [sessionId, participant?.type, fetchPlayback]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -148,6 +163,21 @@ export default function SessionPage() {
     }
   };
 
+  const handleCopyInviteLink = () => {
+    if (!session) return;
+
+    const inviteLink = `${window.location.origin}/join/${session.code}`;
+    navigator.clipboard.writeText(inviteLink)
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch(() => {
+        setLinkCopied(false);
+        alert('Failed to copy invite link. Please copy it manually.');
+      });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
@@ -183,7 +213,7 @@ export default function SessionPage() {
             <button
               onClick={handleGuestJoin}
               disabled={!guestName.trim() || joiningGuest}
-              className="w-full bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
             >
               {joiningGuest ? 'Joining...' : 'Join Party'}
             </button>
@@ -220,6 +250,14 @@ export default function SessionPage() {
                 {copied ? <Check size={20} /> : <Copy size={20} />}
               </button>
             </div>
+
+            <button
+              onClick={handleCopyInviteLink}
+              className="flex items-center gap-2 bg-spotify-green hover:bg-spotify-hover text-white px-4 py-2 rounded-lg transition"
+            >
+              {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
+              <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
+            </button>
           </div>
         </div>
       </header>

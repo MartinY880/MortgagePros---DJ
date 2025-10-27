@@ -33,6 +33,7 @@ model Session {
   name        String
   hostId      String
   isActive    Boolean   @default(true)
+  allowExplicit Boolean @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   

@@ -12,10 +12,12 @@ export const authApi = {
 };
 
 export const sessionApi = {
-  create: (name: string) => api.post('/sessions', { name }),
+  create: (payload: { name: string; allowExplicit?: boolean }) => api.post('/sessions', payload),
   getById: (id: string) => api.get(`/sessions/${id}`),
   getByCode: (code: string) => api.get(`/sessions/code/${code}`),
   getParticipant: (id: string) => api.get(`/sessions/${id}/participant`),
+  getRecent: () => api.get('/sessions/recent'),
+  reopen: (id: string) => api.post(`/sessions/${id}/reopen`),
   delete: (id: string) => api.delete(`/sessions/${id}`),
 };
 

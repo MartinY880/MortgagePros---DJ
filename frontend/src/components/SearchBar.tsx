@@ -1,4 +1,4 @@
-import { ChangeEvent, KeyboardEvent, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { spotifyApi, queueApi } from '../services/api';
 import { SpotifyTrack } from '../types';
@@ -15,20 +15,30 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
   const [results, setResults] = useState<SpotifyTrack[]>([]);
   const [searching, setSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const lastQueryRef = useRef('');
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const performSearch = useCallback(async (term: string) => {
+    if (!term) {
+      setResults([]);
+      setShowResults(false);
+      lastQueryRef.current = '';
+      return;
+    }
 
     if (!canSearch) {
       onRequireAccess();
+      setResults([]);
+      setShowResults(false);
+      lastQueryRef.current = '';
       return;
     }
 
     setSearching(true);
     try {
-      const response = await spotifyApi.search(sessionId, query);
+      const response = await spotifyApi.search(sessionId, term);
       setResults(response.data.tracks || []);
       setShowResults(true);
+      lastQueryRef.current = term;
     } catch (error) {
       console.error('Search error:', error);
       const status = (error as any)?.response?.status;
@@ -38,7 +48,35 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
     } finally {
       setSearching(false);
     }
-  };
+  }, [canSearch, onRequireAccess, sessionId]);
+
+  useEffect(() => {
+    const term = query.trim();
+
+    if (!term) {
+      setResults([]);
+      setShowResults(false);
+      lastQueryRef.current = '';
+      return;
+    }
+
+    if (!canSearch) {
+      onRequireAccess();
+      return;
+    }
+
+    if (term === lastQueryRef.current) {
+      return;
+    }
+
+    setShowResults(true);
+
+    const timer = setTimeout(() => {
+      void performSearch(term);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [query, canSearch, onRequireAccess, performSearch]);
 
   const handleAddTrack = async (trackId: string) => {
     if (!canSearch) {
@@ -80,24 +118,19 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
               placeholder="Search for songs..."
               value={query}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-              onKeyPress={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleSearch()}
               className="w-full bg-spotify-black text-white pl-10 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
             />
           </div>
-          <button
-            onClick={handleSearch}
-            disabled={!query.trim() || searching || !canSearch}
-            className="bg-spotify-green hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 rounded-lg transition font-semibold"
-          >
-            {searching ? 'Searching...' : 'Search'}
-          </button>
         </div>
       </div>
 
       {/* Search Results */}
       {showResults && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray rounded-lg shadow-xl max-h-96 overflow-y-auto z-20">
-          {results.length === 0 ? (
+          {searching && (
+            <div className="p-3 text-gray-400 text-sm">Searching…</div>
+          )}
+          {!searching && results.length === 0 ? (
             <div className="p-8 text-center text-gray-400">
               No results found
             </div>
@@ -123,7 +156,7 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
                     </p>
                   </div>
                   <span className="text-gray-400 text-sm">{formatDuration(track.duration_ms)}</span>
-                  <button className="text-spotify-green hover:text-green-400 transition p-2">
+                  <button className="text-spotify-green hover:text-spotify-hover transition p-2">
                     <Plus size={24} />
                   </button>
                 </div>

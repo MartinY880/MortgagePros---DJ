@@ -6,14 +6,18 @@ export class SessionController {
 
   create = async (req: Request, res: Response) => {
     try {
-      const { name } = req.body;
+      const { name, allowExplicit } = req.body;
       const userId = req.session.userId!;
 
       if (!name) {
         return res.status(400).json({ error: 'Session name is required' });
       }
 
-      const session = await sessionService.createSession(userId, name);
+      if (typeof allowExplicit !== 'undefined' && typeof allowExplicit !== 'boolean') {
+        return res.status(400).json({ error: 'allowExplicit must be a boolean when provided' });
+      }
+
+      const session = await sessionService.createSession(userId, name, { allowExplicit });
       res.json({ session });
     } catch (error) {
       console.error('Create session error:', error);
@@ -129,6 +133,18 @@ export class SessionController {
     }
   };
 
+  getRecent = async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId!;
+      const session = await sessionService.getMostRecentSession(userId);
+
+      res.json({ session: session ?? null });
+    } catch (error) {
+      console.error('Get recent session error:', error);
+      res.status(500).json({ error: 'Failed to fetch recent session' });
+    }
+  };
+
   getParticipant = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -192,6 +208,46 @@ export class SessionController {
       console.error('Delete session error:', error);
       res.status(error.message === 'Only the host can delete the session' ? 403 : 500)
         .json({ error: error.message || 'Failed to delete session' });
+    }
+  };
+
+  reopen = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = req.session.userId!;
+
+      const session = await sessionService.activateExistingSession(id, userId);
+
+      res.json({ session });
+    } catch (error: any) {
+      console.error('Reopen session error:', error);
+      const status = error.message === 'Session not found' ? 404
+        : error.message === 'Only the host can reopen the session' ? 403
+        : 500;
+      res.status(status).json({ error: error.message || 'Failed to reopen session' });
+    }
+  };
+
+  updateSettings = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = req.session.userId!;
+      const { allowExplicit } = req.body;
+
+      if (typeof allowExplicit !== 'boolean') {
+        return res.status(400).json({ error: 'allowExplicit must be provided as a boolean' });
+      }
+
+      const session = await sessionService.updateSessionSettings(id, userId, { allowExplicit });
+
+      res.json({ session });
+    } catch (error: any) {
+      console.error('Update session settings error:', error);
+      const message = error.message || 'Failed to update session settings';
+      const status = message === 'Session not found' ? 404
+        : message === 'Only the host can update session settings' ? 403
+        : 500;
+      res.status(status).json({ error: message });
     }
   };
 }

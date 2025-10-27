@@ -77,14 +77,19 @@ export class QueueController {
           .json({ error: context.error });
       }
 
-    const { session, actor, role } = context;
-    const queuedBefore = await queueService.countActiveQueueItems(sessionId);
+      const { session, actor, role } = context;
+      const allowExplicit = (session as any).allowExplicit ?? true;
+      const queuedBefore = await queueService.countActiveQueueItems(sessionId);
 
     playbackService.ensureMonitor(sessionId, session.hostId);
 
       // Guests use the host's Spotify credentials
       const accessToken = await spotifyService.ensureValidToken(session.hostId);
       const track = await spotifyService.getTrack(spotifyTrackId, accessToken);
+
+      if (!allowExplicit && track.explicit) {
+        return res.status(400).json({ error: 'Explicit tracks are disabled for this session' });
+      }
 
       // Add to queue
       const queueItem = await queueService.addToQueue(

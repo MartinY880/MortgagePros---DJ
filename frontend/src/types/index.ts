@@ -12,6 +12,7 @@ export interface Session {
   name: string;
   hostId: string;
   isActive: boolean;
+  allowExplicit: boolean;
   createdAt: string;
   host: {
     id: string;
