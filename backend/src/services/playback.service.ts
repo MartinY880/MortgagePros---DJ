@@ -5,13 +5,16 @@ import { broadcastQueueUpdate, broadcastPlaybackUpdate } from '../sockets/handle
 
 interface MonitorState {
   hostId: string;
-  interval: NodeJS.Timeout;
+  timeout: NodeJS.Timeout | null;
   processing: boolean;
   lastQueuedItemId: string | null;
   pauseUntil: number | null;
 }
 
-const POLL_INTERVAL_MS = 5000;
+const MIN_POLL_DELAY_MS = 3000;
+const DEFAULT_IDLE_POLL_MS = 15000;
+const POST_TRACK_END_DELAY_MS = 5000;
+const POST_SKIP_DELAY_MS = 3000;
 
 class PlaybackService {
   private io: SocketIOServer | null = null;
@@ -26,29 +29,30 @@ class PlaybackService {
 
     if (existing) {
       existing.hostId = hostId;
+      if (!existing.timeout && !existing.processing) {
+        this.schedulePoll(sessionId, 0);
+      }
       return;
     }
 
-    const interval = setInterval(() => {
-      this.pollSession(sessionId).catch((error) => {
-        console.error(`Playback poll error for session ${sessionId}:`, error);
-      });
-    }, POLL_INTERVAL_MS);
-
     this.monitors.set(sessionId, {
       hostId,
-      interval,
+      timeout: null,
       processing: false,
       lastQueuedItemId: null,
       pauseUntil: null,
     });
+
+    this.schedulePoll(sessionId, 0);
   }
 
   stopMonitor(sessionId: string) {
     const monitor = this.monitors.get(sessionId);
 
     if (monitor) {
-      clearInterval(monitor.interval);
+      if (monitor.timeout) {
+        clearTimeout(monitor.timeout);
+      }
       this.monitors.delete(sessionId);
     }
   }
@@ -59,6 +63,41 @@ class PlaybackService {
     if (monitor) {
       monitor.lastQueuedItemId = queueItemId;
     }
+  }
+
+  requestImmediateSync(sessionId: string, delayMs = 0) {
+    const monitor = this.monitors.get(sessionId);
+
+    if (!monitor) {
+      return;
+    }
+
+    monitor.pauseUntil = null;
+
+    if (monitor.processing) {
+      return;
+    }
+
+    this.schedulePoll(sessionId, delayMs);
+  }
+
+  private schedulePoll(sessionId: string, delayMs: number) {
+    const monitor = this.monitors.get(sessionId);
+
+    if (!monitor) {
+      return;
+    }
+
+    if (monitor.timeout) {
+      clearTimeout(monitor.timeout);
+    }
+
+    monitor.timeout = setTimeout(() => {
+      monitor.timeout = null;
+      this.pollSession(sessionId).catch((error) => {
+        console.error(`Playback poll error for session ${sessionId}:`, error);
+      });
+    }, Math.max(0, delayMs));
   }
 
   private async pollSession(sessionId: string) {
@@ -82,10 +121,19 @@ class PlaybackService {
     monitor.processing = true;
 
     try {
+      const now = Date.now();
+
+      if (monitor.pauseUntil && now < monitor.pauseUntil) {
+        this.schedulePoll(sessionId, monitor.pauseUntil - now);
+        return;
+      }
+      monitor.pauseUntil = null;
+
       const accessToken = await spotifyService.ensureValidToken(monitor.hostId);
       const playback = await spotifyService.getCurrentPlayback(accessToken);
 
       let queueState = await queueService.getQueueWithNext(sessionId);
+      let nextDelay = DEFAULT_IDLE_POLL_MS;
 
       if (playback?.item?.id) {
         const currentTrackId: string = playback.item.id;
@@ -94,6 +142,7 @@ class PlaybackService {
         if (consumed) {
           monitor.lastQueuedItemId = null;
           queueState = await queueService.getQueueWithNext(sessionId);
+          nextDelay = POST_TRACK_END_DELAY_MS;
         }
         broadcastPlaybackUpdate(this.io, sessionId, playback);
       } else {
@@ -101,6 +150,7 @@ class PlaybackService {
           monitor.lastQueuedItemId = null;
         }
         broadcastPlaybackUpdate(this.io, sessionId, playback ?? null);
+        nextDelay = POST_TRACK_END_DELAY_MS;
       }
 
       if (queueState.nextUp && queueState.nextUp.id !== monitor.lastQueuedItemId) {
@@ -118,6 +168,18 @@ class PlaybackService {
       }
 
       broadcastQueueUpdate(this.io, sessionId, queueState);
+
+      if (playback?.item && playback.is_playing) {
+        const progress = playback.progress_ms ?? 0;
+        const duration = playback.item.duration_ms ?? 0;
+
+        if (duration > 0) {
+          const remaining = Math.max(0, duration - progress);
+          nextDelay = Math.max(MIN_POLL_DELAY_MS, remaining + POST_TRACK_END_DELAY_MS);
+        }
+      }
+
+      this.schedulePoll(sessionId, nextDelay);
     } catch (error: any) {
       if (error?.statusCode === 429) {
         const retryHeader = error.headers?.['retry-after'] ?? error.headers?.['Retry-After'];
@@ -125,8 +187,10 @@ class PlaybackService {
         const delaySeconds = Number.isFinite(retrySeconds) && retrySeconds > 0 ? retrySeconds : 60;
         monitor.pauseUntil = Date.now() + delaySeconds * 1000;
         console.warn(`Spotify rate limited session ${sessionId}. Pausing playback sync for ${delaySeconds} seconds.`);
+        this.schedulePoll(sessionId, delaySeconds * 1000);
       } else {
         console.error(`Playback sync error for session ${sessionId}:`, error);
+        this.schedulePoll(sessionId, DEFAULT_IDLE_POLL_MS);
       }
     } finally {
       monitor.processing = false;
@@ -135,3 +199,4 @@ class PlaybackService {
 }
 
 export const playbackService = new PlaybackService();
+export const PLAYBACK_SKIP_POLL_DELAY_MS = POST_SKIP_DELAY_MS;

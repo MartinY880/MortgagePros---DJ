@@ -5,20 +5,22 @@ import { PlaybackState } from '../types';
 
 interface NowPlayingProps {
   canControl?: boolean;
+  sessionId?: string;
   playback: PlaybackState | null;
   error: string | null;
-  setPlayback: Dispatch<SetStateAction<PlaybackState | null>>;
   setError: Dispatch<SetStateAction<string | null>>;
   onRefresh: () => Promise<void>;
+  updatePlayback: (updater: (current: PlaybackState | null) => PlaybackState | null) => void;
 }
 
 export default function NowPlaying({
   canControl = false,
+  sessionId,
   playback,
   error,
-  setPlayback,
   setError,
   onRefresh,
+  updatePlayback,
 }: NowPlayingProps) {
   const isPlaying = playback?.is_playing ?? false;
 
@@ -28,10 +30,10 @@ export default function NowPlaying({
     try {
       if (isPlaying) {
         await spotifyApi.pause();
-        setPlayback((current) => (current ? { ...current, is_playing: false } : current));
+        updatePlayback((current) => (current ? { ...current, is_playing: false } : current));
       } else {
         await spotifyApi.play();
-        setPlayback((current) => (current ? { ...current, is_playing: true } : current));
+        updatePlayback((current) => (current ? { ...current, is_playing: true } : current));
       }
       setError(null);
       setTimeout(() => {
@@ -44,10 +46,10 @@ export default function NowPlaying({
   };
 
   const handleNext = async () => {
-    if (!canControl) return;
+    if (!canControl || !sessionId) return;
 
     try {
-      await spotifyApi.next();
+      await spotifyApi.next(sessionId);
       setTimeout(() => {
         void onRefresh();
       }, 1000);

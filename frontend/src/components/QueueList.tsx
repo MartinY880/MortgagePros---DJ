@@ -36,7 +36,7 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
 
     try {
       await queueApi.vote(queueItemId, voteType);
-      onQueueUpdate();
+      void onQueueUpdate();
     } catch (error) {
       console.error('Vote error:', error);
       const status = (error as any)?.response?.status;
@@ -55,7 +55,7 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
     
     try {
       await queueApi.remove(queueItemId);
-      onQueueUpdate();
+      void onQueueUpdate();
     } catch (error) {
       console.error('Remove error:', error);
       const status = (error as any)?.response?.status;

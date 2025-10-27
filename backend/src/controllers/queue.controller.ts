@@ -116,6 +116,8 @@ export class QueueController {
         }
       }
 
+      playbackService.requestImmediateSync(sessionId);
+
       res.json({ queueItem, role, nextUp: state.nextUp, queue: state.queue });
     } catch (error: any) {
       console.error('Add to queue error:', error);
@@ -162,6 +164,7 @@ export class QueueController {
         playbackService.ensureMonitor(queueItem.sessionId, queueItem.session.hostId);
       }
       const state = await this.emitQueueState(req, queueItem.sessionId);
+      playbackService.requestImmediateSync(queueItem.sessionId);
       res.json({ message: 'Removed from queue', nextUp: state.nextUp, queue: state.queue });
     } catch (error: any) {
       console.error('Remove from queue error:', error);
@@ -194,6 +197,7 @@ export class QueueController {
 
       const result = await queueService.vote(queueItemId, context.actor, voteType);
       const state = await this.emitQueueState(req, queueItem.sessionId);
+  playbackService.requestImmediateSync(queueItem.sessionId);
       res.json({ ...result, nextUp: state.nextUp, queue: state.queue });
     } catch (error) {
       console.error('Vote error:', error);

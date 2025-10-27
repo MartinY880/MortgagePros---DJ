@@ -36,7 +36,7 @@ export const spotifyApi = {
   getPlayback: (sessionId: string) => api.get(`/spotify/playback?sessionId=${sessionId}`),
   play: () => api.post('/spotify/play'),
   pause: () => api.post('/spotify/pause'),
-  next: () => api.post('/spotify/next'),
+  next: (sessionId: string) => api.post('/spotify/next', { sessionId }),
 };
 
 export const guestApi = {

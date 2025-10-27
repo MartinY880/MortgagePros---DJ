@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
-import { playbackService } from '../services/playback.service';
+import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
 
 export class SpotifyController {
   async search(req: Request, res: Response) {
@@ -120,9 +120,28 @@ export class SpotifyController {
 
   async next(req: Request, res: Response) {
     try {
+      const { sessionId } = req.body;
       const userId = req.session.userId!;
+
+      if (!sessionId || typeof sessionId !== 'string') {
+        return res.status(400).json({ error: 'sessionId is required to skip tracks' });
+      }
+
+      const session = await sessionService.getSession(sessionId);
+
+      if (!session || !session.isActive) {
+        return res.status(404).json({ error: 'Session not found or inactive' });
+      }
+
+      if (session.hostId !== userId) {
+        return res.status(403).json({ error: 'Only the host can skip tracks' });
+      }
+
+      playbackService.ensureMonitor(sessionId, session.hostId);
+
       const accessToken = await spotifyService.ensureValidToken(userId);
       await spotifyService.skipToNext(accessToken);
+  playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
 
       res.json({ message: 'Skipped to next' });
     } catch (error) {

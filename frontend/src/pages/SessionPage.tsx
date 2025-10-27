@@ -1,107 +1,122 @@
-import { ChangeEvent, KeyboardEvent, useState, useEffect, useCallback } from 'react';
+import { ChangeEvent, KeyboardEvent, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
-import { sessionApi, queueApi, guestApi, spotifyApi } from '../services/api';
+import { guestApi } from '../services/api';
 import { socketService } from '../services/socket';
 import { Session, SessionParticipant, QueueState, PlaybackState } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
+import { useApiSWR } from '../hooks/useApiSWR';
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const [session, setSession] = useState<Session | null>(null);
-  const [queueState, setQueueState] = useState<QueueState>({ nextUp: null, queue: [] });
-  const [playback, setPlayback] = useState<PlaybackState | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [participant, setParticipant] = useState<SessionParticipant | null>(null);
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [joiningGuest, setJoiningGuest] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  const fetchSession = async () => {
-    try {
-      const response = await sessionApi.getById(sessionId!);
-      setSession(response.data.session);
-    } catch (error) {
-      console.error('Failed to fetch session:', error);
-      navigate('/dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-  const fetchQueue = useCallback(async () => {
-    if (!sessionId) return;
+  const {
+    data: sessionData,
+    error: sessionError,
+    isLoading: sessionLoading,
+  } = useApiSWR<{ session: Session }>(
+    sessionId ? `/sessions/${sessionId}` : null,
+    { shouldRetryOnError: false }
+  );
+  const session = sessionData?.session ?? null;
 
-    try {
-      const response = await queueApi.get(sessionId);
-      setQueueState({
-        nextUp: response.data.nextUp ?? null,
-        queue: response.data.queue ?? [],
-      });
-    } catch (error) {
-      console.error('Failed to fetch queue:', error);
-    }
-  }, [sessionId]);
+  const {
+    data: queueData,
+    mutate: mutateQueue,
+  } = useApiSWR<QueueState>(
+    sessionId ? `/queue/${sessionId}` : null,
+    { keepPreviousData: true }
+  );
+  const queueState: QueueState = queueData ?? { nextUp: null, queue: [] };
 
-  const fetchPlayback = useCallback(async () => {
-    if (!sessionId) return;
+  const {
+    data: playbackData,
+    error: playbackFetchError,
+    mutate: mutatePlayback,
+  } = useApiSWR<{ playback: PlaybackState | null }>(
+    sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
+    { shouldRetryOnError: false }
+  );
+  const playback = playbackData?.playback ?? null;
 
-    try {
-      const response = await spotifyApi.getPlayback(sessionId);
-      setPlayback(response.data.playback || null);
-      setPlaybackError(null);
-    } catch (error: any) {
-      console.error('Failed to fetch playback:', error);
-      const status = error?.response?.status;
-      if (status === 401 || status === 403) {
-        setPlaybackError('Join the session to view playback');
-      } else {
-        setPlaybackError('Playback data unavailable');
-      }
-      setPlayback(null);
-    }
-  }, [sessionId]);
+  const {
+    data: participantData,
+    error: participantError,
+    mutate: mutateParticipant,
+  } = useApiSWR<{ participant: SessionParticipant }>(
+    sessionId ? `/sessions/${sessionId}/participant` : null,
+    { revalidateOnFocus: false }
+  );
+  const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
 
   useEffect(() => {
-    if (!sessionId) return;
-    if (participant?.type !== 'host') return;
+    if (sessionError?.response?.status === 404) {
+      navigate('/dashboard');
+    }
+  }, [sessionError, navigate]);
+
+  useEffect(() => {
+    if (playbackFetchError) {
+      const status = playbackFetchError.response?.status;
+      const message = status === 401 || status === 403
+        ? 'Join the session to view playback'
+        : 'Playback data unavailable';
+      setPlaybackError(message);
+      return;
+    }
+
+    setPlaybackError(null);
+  }, [playbackFetchError, playbackData]);
+
+  useEffect(() => {
+    if (!participant) {
+      return;
+    }
+
+    if (participant.type === 'none') {
+      setShowGuestModal(true);
+    } else {
+      setShowGuestModal(false);
+    }
+  }, [participant?.type]);
+
+  useEffect(() => {
+    if (!sessionId || participant?.type !== 'host') {
+      return;
+    }
 
     const KEEP_ALIVE_INTERVAL_MS = 60000;
-
-    const keepAliveInterval = setInterval(() => {
-      void fetchPlayback();
+    const intervalId = setInterval(() => {
+      void mutatePlayback();
       socketService.getSocket()?.emit('host_keep_alive', { sessionId });
     }, KEEP_ALIVE_INTERVAL_MS);
 
-    return () => clearInterval(keepAliveInterval);
-  }, [sessionId, participant?.type, fetchPlayback]);
+    return () => clearInterval(intervalId);
+  }, [sessionId, participant?.type, mutatePlayback]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      return;
+    }
 
-    fetchSession();
-    fetchQueue();
-    fetchParticipant();
-    fetchPlayback();
-
-    // Connect to socket
     socketService.connect();
     const queueCleanup = socketService.onQueueUpdated((data) => {
-      setQueueState({
-        nextUp: data.nextUp ?? null,
-        queue: data.queue ?? [],
-      });
+      void mutateQueue(data, false);
     });
 
     const playbackCleanup = socketService.onNowPlaying((data) => {
-      setPlayback(data.playback ?? null);
+      void mutatePlayback({ playback: data.playback ?? null }, false);
       setPlaybackError(null);
     });
 
@@ -113,22 +128,7 @@ export default function SessionPage() {
       socketService.leaveSession(sessionId);
       socketService.disconnect();
     };
-  }, [sessionId, fetchQueue, fetchPlayback]);
-
-  const fetchParticipant = async () => {
-    if (!sessionId) return;
-
-    try {
-      const response = await sessionApi.getParticipant(sessionId);
-      const participantInfo: SessionParticipant = response.data.participant;
-      setParticipant(participantInfo);
-      setShowGuestModal(participantInfo.type === 'none');
-    } catch (error) {
-      console.error('Failed to fetch participant info:', error);
-      setParticipant({ type: 'none' });
-      setShowGuestModal(true);
-    }
-  };
+  }, [sessionId, mutateQueue, mutatePlayback]);
 
   const handleGuestJoin = async () => {
     if (!guestName.trim() || !sessionId) return;
@@ -137,8 +137,8 @@ export default function SessionPage() {
     setJoinError(null);
 
     try {
-  await guestApi.joinById(sessionId, guestName.trim());
-  await Promise.all([fetchParticipant(), fetchQueue(), fetchPlayback()]);
+      await guestApi.joinById(sessionId, guestName.trim());
+      await Promise.all([mutateParticipant(), mutateQueue(), mutatePlayback()]);
       setGuestName('');
       setShowGuestModal(false);
     } catch (error: any) {
@@ -178,7 +178,7 @@ export default function SessionPage() {
       });
   };
 
-  if (loading) {
+  if (sessionLoading && !session) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
         <div className="text-white text-xl">Loading session...</div>
@@ -189,6 +189,25 @@ export default function SessionPage() {
   if (!session) {
     return null;
   }
+
+  const refreshQueue = async () => {
+    await mutateQueue();
+  };
+
+  const refreshPlayback = async () => {
+    await mutatePlayback();
+  };
+
+  const updatePlayback = (updater: (current: PlaybackState | null) => PlaybackState | null) => {
+    void mutatePlayback((previous: { playback: PlaybackState | null } | undefined) => {
+      const current = previous?.playback ?? null;
+      return { playback: updater(current) };
+    }, false);
+  };
+
+  const upcomingCount = queueState.queue.length + (queueState.nextUp ? 1 : 0);
+  const totalVotes = (queueState.nextUp?.voteScore ?? 0) +
+    queueState.queue.reduce((sum, item) => sum + item.voteScore, 0);
 
   return (
     <div className="min-h-screen bg-spotify-dark">
@@ -268,24 +287,25 @@ export default function SessionPage() {
           <div className="lg:col-span-2 space-y-6">
             <NowPlaying
               canControl={participant?.type === 'host'}
+              sessionId={session.id}
               playback={playback}
               error={playbackError}
-              setPlayback={setPlayback}
               setError={setPlaybackError}
-              onRefresh={fetchPlayback}
+              onRefresh={refreshPlayback}
+              updatePlayback={updatePlayback}
             />
             <NextUp track={queueState.nextUp} />
             <SearchBar
-              sessionId={sessionId!}
-              onTrackAdded={fetchQueue}
+              sessionId={session.id}
+              onTrackAdded={() => { void refreshQueue(); }}
               canSearch={participant?.type === 'host' || participant?.type === 'guest'}
               onRequireAccess={handleRequireAccess}
             />
             <QueueList
               nextUp={queueState.nextUp}
               queue={queueState.queue}
-              sessionId={sessionId!}
-              onQueueUpdate={fetchQueue}
+              sessionId={session.id}
+              onQueueUpdate={() => { void refreshQueue(); }}
               participant={participant}
               onRequireAccess={handleRequireAccess}
             />
@@ -306,10 +326,8 @@ export default function SessionPage() {
             <div className="bg-spotify-gray p-6 rounded-lg">
               <h3 className="text-xl font-bold text-white mb-2">Queue Stats</h3>
               <div className="space-y-2 text-gray-300">
-                <p>Upcoming tracks: <span className="text-spotify-green font-bold">{queueState.queue.length + (queueState.nextUp ? 1 : 0)}</span></p>
-                <p>Total votes: <span className="text-spotify-green font-bold">
-                  {(queueState.nextUp?.voteScore ?? 0) + queueState.queue.reduce((sum, item) => sum + item.voteScore, 0)}
-                </span></p>
+                <p>Upcoming tracks: <span className="text-spotify-green font-bold">{upcomingCount}</span></p>
+                <p>Total votes: <span className="text-spotify-green font-bold">{totalVotes}</span></p>
               </div>
             </div>
           </div>

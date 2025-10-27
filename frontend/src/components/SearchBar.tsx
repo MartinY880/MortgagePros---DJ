@@ -1,5 +1,7 @@
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { Search, Plus } from 'lucide-react';
+import useSWR, { Fetcher } from 'swr';
+import { AxiosError } from 'axios';
 import { spotifyApi, queueApi } from '../services/api';
 import { SpotifyTrack } from '../types';
 
@@ -12,71 +14,66 @@ interface SearchBarProps {
 
 export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SpotifyTrack[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
-  const lastQueryRef = useRef('');
-
-  const performSearch = useCallback(async (term: string) => {
-    if (!term) {
-      setResults([]);
-      setShowResults(false);
-      lastQueryRef.current = '';
-      return;
-    }
-
-    if (!canSearch) {
-      onRequireAccess();
-      setResults([]);
-      setShowResults(false);
-      lastQueryRef.current = '';
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const response = await spotifyApi.search(sessionId, term);
-      setResults(response.data.tracks || []);
-      setShowResults(true);
-      lastQueryRef.current = term;
-    } catch (error) {
-      console.error('Search error:', error);
-      const status = (error as any)?.response?.status;
-      if (status === 401 || status === 403) {
-        onRequireAccess();
-      }
-    } finally {
-      setSearching(false);
-    }
-  }, [canSearch, onRequireAccess, sessionId]);
+  const canExecuteSearch = canSearch && debouncedQuery.length > 0;
 
   useEffect(() => {
     const term = query.trim();
 
     if (!term) {
-      setResults([]);
+      setDebouncedQuery('');
       setShowResults(false);
-      lastQueryRef.current = '';
       return;
     }
 
     if (!canSearch) {
       onRequireAccess();
-      return;
-    }
-
-    if (term === lastQueryRef.current) {
+      setShowResults(false);
+      setDebouncedQuery('');
       return;
     }
 
     setShowResults(true);
-
     const timer = setTimeout(() => {
-      void performSearch(term);
+      setDebouncedQuery(term);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [query, canSearch, onRequireAccess, performSearch]);
+  }, [query, canSearch, onRequireAccess]);
+
+  const searchFetcher: Fetcher<SpotifyTrack[], [string, string, string]> = async ([, id, term]) => {
+    const response = await spotifyApi.search(id, term);
+    return response.data.tracks || [];
+  };
+
+  const {
+    data: searchData,
+    error: searchError,
+    isValidating,
+  } = useSWR<SpotifyTrack[], AxiosError>(
+    canExecuteSearch ? ['spotify-search', sessionId, debouncedQuery] : null,
+    searchFetcher,
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    }
+  );
+
+  useEffect(() => {
+    if (!searchError) {
+      return;
+    }
+
+    console.error('Search error:', searchError);
+    const status = searchError.response?.status;
+    if (status === 401 || status === 403) {
+      onRequireAccess();
+    }
+  }, [searchError, onRequireAccess]);
+
+  const results = searchData ?? [];
+  const searching = isValidating;
 
   const handleAddTrack = async (trackId: string) => {
     if (!canSearch) {
@@ -86,10 +83,10 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
 
     try {
       await queueApi.add(sessionId, trackId);
-      onTrackAdded();
+      void onTrackAdded();
       setShowResults(false);
       setQuery('');
-      setResults([]);
+      setDebouncedQuery('');
     } catch (error: any) {
       console.error('Add track error:', error);
       const status = error?.response?.status;

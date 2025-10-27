@@ -3,47 +3,39 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Users } from 'lucide-react';
 import { authApi, sessionApi } from '../services/api';
 import { User, Session } from '../types';
+import { useApiSWR } from '../hooks/useApiSWR';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
   const [sessionName, setSessionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [recentSession, setRecentSession] = useState<Session | null>(null);
-  const [loadingRecent, setLoadingRecent] = useState(true);
+  const [allowExplicit, setAllowExplicit] = useState(true);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const [allowExplicit, setAllowExplicit] = useState(true);
+
+  const { data: userData, error: userError, isLoading: userLoading } = useApiSWR<{ user: User }>(
+    '/auth/me',
+    {
+      shouldRetryOnError: false,
+    }
+  );
+  const user = userData?.user ?? null;
+
+  const {
+    data: recentData,
+    isLoading: loadingRecent,
+    mutate: mutateRecent,
+  } = useApiSWR<{ session: Session | null }>(user ? '/sessions/recent' : null, {
+    keepPreviousData: true,
+  });
+
+  const recentSession = recentData?.session ?? null;
 
   useEffect(() => {
-    fetchUser();
-    fetchRecentSession();
-  }, []);
-
-  const fetchUser = async () => {
-    try {
-      const response = await authApi.getMe();
-      setUser(response.data.user);
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
+    if (userError?.response?.status === 401) {
       navigate('/');
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const fetchRecentSession = async () => {
-    try {
-      const response = await sessionApi.getRecent();
-      setRecentSession(response.data.session || null);
-    } catch (error) {
-      console.error('Failed to fetch recent session:', error);
-      setRecentSession(null);
-    } finally {
-      setLoadingRecent(false);
-    }
-  };
+  }, [userError, navigate]);
 
   const handleCreateSession = async () => {
     if (!sessionName.trim()) return;
@@ -54,6 +46,7 @@ export default function Dashboard() {
         allowExplicit,
       });
       const session: Session = response.data.session;
+      void mutateRecent();
       navigate(`/session/${session.id}`);
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -92,23 +85,28 @@ export default function Dashboard() {
     try {
       const response = await sessionApi.reopen(recentSession.id);
       const session: Session = response.data.session;
+      void mutateRecent();
       navigate(`/session/${session.id}`);
     } catch (error: any) {
       console.error('Failed to reopen session:', error);
       const message = error?.response?.data?.error || 'Failed to reopen session';
       setResumeError(message);
-      await fetchRecentSession();
+      void mutateRecent();
     } finally {
       setResuming(false);
     }
   };
 
-  if (loading) {
+  if (userLoading) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
