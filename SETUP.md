@@ -6,6 +6,16 @@ Follow these steps to get your Spotify Jukebox app running locally!
 
 ---
 
+## Step 0: Clerk Setup
+
+1. Visit **https://dashboard.clerk.com/** and create a new application.
+2. Add **http://localhost:5173** as an allowed origin for development.
+3. Copy your **Publishable Key** and **Secret Key** – you will add them to the shared `.env` file later.
+
+> ⚠️ **Production reminder**: update the allowed origins and URLs in Clerk when you deploy.
+
+---
+
 ## Step 1: Spotify Developer Setup
 
 1. Go to **https://developer.spotify.com/dashboard**
@@ -49,28 +59,15 @@ npm install
 
 ## Step 3: Configure Environment Variables
 
-1. In the `backend` folder, create a `.env` file:
+1. From the repository root, copy the shared example file:
 
 ```powershell
-cd ..\backend
 Copy-Item .env.example .env
 ```
 
-2. Open `backend\.env` and fill in your Spotify credentials:
+2. Open the new `.env` (still at the repository root) and fill in your Spotify credentials, Clerk keys, and any `VITE_` variables for the frontend.
 
-```env
-SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_CLIENT_SECRET=your_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:5000/api/auth/callback
-
-PORT=5000
-NODE_ENV=development
-SESSION_SECRET=MySecretKey123ChangeThis
-FRONTEND_URL=http://localhost:5173
-DATABASE_URL="file:./dev.db"
-```
-
-⚠️ **Important**: Replace `your_client_id_here` and `your_client_secret_here` with your actual Spotify credentials!
+⚠️ **Important**: Replace the placeholder values (`your_client_id_here`, etc.) with your actual secrets before running the app!
 
 ---
 

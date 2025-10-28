@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUser } from '@clerk/clerk-react';
 import { sessionApi } from '../services/api';
 
 export default function GuestRedirect() {
   const { sessionCode } = useParams<{ sessionCode: string }>();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const { isLoaded, isSignedIn } = useUser();
 
   useEffect(() => {
     let active = true;
@@ -16,13 +18,31 @@ export default function GuestRedirect() {
         return;
       }
 
+      if (!isLoaded) {
+        return;
+      }
+
+      if (!isSignedIn) {
+        navigate('/', {
+          replace: true,
+          state: {
+            requireSignIn: true,
+            redirectTo: `/join/${sessionCode}`,
+          },
+        });
+        return;
+      }
+
       try {
         const { data } = await sessionApi.getByCode(sessionCode);
         if (!active) return;
         const sessionId = data.session?.id;
 
         if (sessionId) {
-          navigate(`/session/${sessionId}`, { replace: true, state: { fromInvite: true } });
+          navigate(`/session/${sessionId}`, {
+            replace: true,
+            state: { fromInvite: true, sessionId },
+          });
         } else {
           setError('Session not found');
         }
@@ -37,7 +57,7 @@ export default function GuestRedirect() {
     return () => {
       active = false;
     };
-  }, [sessionCode, navigate]);
+  }, [sessionCode, navigate, isLoaded, isSignedIn]);
 
   if (error) {
     return (

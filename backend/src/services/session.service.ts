@@ -143,6 +143,11 @@ export class SessionService {
 
   async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string) {
     const guestModel = (prisma as any).guest;
+    const sanitizedName = name.trim();
+
+    if (!sanitizedName) {
+      throw new Error('Guest name is required');
+    }
 
     if (guestId) {
       const existingGuest = await guestModel.findUnique({
@@ -150,13 +155,13 @@ export class SessionService {
       });
 
       if (existingGuest && existingGuest.sessionId === sessionId) {
-        if (existingGuest.name === name) {
+        if (existingGuest.name === sanitizedName) {
           return existingGuest;
         }
 
         return guestModel.update({
           where: { id: guestId },
-          data: { name },
+          data: { name: sanitizedName },
         });
       }
     }
@@ -164,7 +169,7 @@ export class SessionService {
     return guestModel.create({
       data: {
         sessionId,
-        name,
+        name: sanitizedName,
       },
     });
   }

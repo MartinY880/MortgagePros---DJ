@@ -1,20 +1,42 @@
-import { ChangeEvent, KeyboardEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { authApi, guestApi } from '../services/api';
 import { Session } from '../types';
+import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
+
+type LandingLocationState = {
+  requireSignIn?: boolean;
+  redirectTo?: string;
+} | null;
+
+const resolveAfterAuthUrl = (path?: string) => {
+  if (!path) {
+    return window.location.href;
+  }
+
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`;
+};
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = (location.state as LandingLocationState) ?? null;
   const [joinCode, setJoinCode] = useState('');
-  const [guestName, setGuestName] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<'host' | 'guest' | null>(null);
+  const [handledAuthRedirect, setHandledAuthRedirect] = useState(false);
+  const { isLoaded, isSignedIn } = useUser();
+  const { openSignIn } = useClerk();
 
-  const handleLogin = async () => {
+  const startSpotifyConnect = useCallback(async () => {
     try {
       const response = await authApi.getAuthUrl();
-      console.log('Auth response:', response.data); // Debug log
-      
+
       if (response.data && response.data.authUrl) {
         window.location.href = response.data.authUrl;
       } else {
@@ -26,10 +48,10 @@ export default function LandingPage() {
       const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
       alert(`Failed to connect: ${errorMsg}\n\nMake sure the backend server is running and accessible.`);
     }
-  };
+  }, []);
 
-  const handleGuestJoin = async () => {
-    if (joinCode.trim().length !== 6 || !guestName.trim()) {
+  const attemptGuestJoin = useCallback(async () => {
+    if (joinCode.trim().length !== 6) {
       return;
     }
 
@@ -37,9 +59,8 @@ export default function LandingPage() {
     setJoinError(null);
 
     try {
-      const response = await guestApi.joinByCode(joinCode.toUpperCase(), guestName.trim());
+      const response = await guestApi.joinByCode(joinCode.toUpperCase());
       const session: Session = response.data.session;
-      setGuestName('');
       setJoinCode('');
       navigate(`/session/${session.id}`);
     } catch (error: any) {
@@ -49,11 +70,122 @@ export default function LandingPage() {
     } finally {
       setJoining(false);
     }
+  }, [joinCode, navigate]);
+
+  useEffect(() => {
+    if (!pendingAction || !isSignedIn) {
+      return;
+    }
+
+    const run = async () => {
+      try {
+        if (pendingAction === 'host') {
+          await startSpotifyConnect();
+        } else {
+          await attemptGuestJoin();
+        }
+      } finally {
+        setPendingAction(null);
+      }
+    };
+
+    void run();
+  }, [pendingAction, isSignedIn, startSpotifyConnect, attemptGuestJoin]);
+
+  const promptClerkSignIn = async (action: 'host' | 'guest', redirectPath?: string) => {
+    if (!isLoaded) {
+      return;
+    }
+
+    setPendingAction(action);
+
+    try {
+      await openSignIn({
+        afterSignInUrl: resolveAfterAuthUrl(redirectPath),
+        afterSignUpUrl: resolveAfterAuthUrl(redirectPath),
+      });
+    } catch (error) {
+      console.error('Clerk sign-in aborted:', error);
+      setPendingAction(null);
+    }
   };
+
+  const handleLogin = async () => {
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      await promptClerkSignIn('host');
+      return;
+    }
+
+    await startSpotifyConnect();
+  };
+
+  const handleGuestJoin = async () => {
+    if (joinCode.trim().length !== 6) {
+      return;
+    }
+
+    if (!isLoaded) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      await promptClerkSignIn('guest');
+      return;
+    }
+
+    await attemptGuestJoin();
+  };
+
+  useEffect(() => {
+    if (!isLoaded || handledAuthRedirect) {
+      return;
+    }
+
+    const redirectRequest = locationState;
+
+    if (!redirectRequest?.requireSignIn) {
+      return;
+    }
+
+    const targetUrl = resolveAfterAuthUrl(redirectRequest.redirectTo);
+
+    const run = async () => {
+      setHandledAuthRedirect(true);
+
+      try {
+        await openSignIn({
+          afterSignInUrl: targetUrl,
+          afterSignUpUrl: targetUrl,
+        });
+      } catch (error) {
+        console.error('Clerk sign-in aborted:', error);
+        setHandledAuthRedirect(false);
+      } finally {
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    };
+
+    void run();
+  }, [handledAuthRedirect, isLoaded, location.pathname, locationState, navigate, openSignIn]);
+
+  useEffect(() => {
+    if (!locationState?.requireSignIn && handledAuthRedirect) {
+      setHandledAuthRedirect(false);
+    }
+  }, [handledAuthRedirect, locationState]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
+        {isLoaded && isSignedIn && (
+          <div className="flex justify-end mb-4">
+            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
+          </div>
+        )}
         <div className="mb-8 flex justify-center">
           <img 
             src="https://mtgpros.com/wp-content/uploads/2023/04/MTGProsSiteLogo.webp" 
@@ -86,42 +218,24 @@ export default function LandingPage() {
         <div className="mt-10 bg-spotify-gray bg-opacity-60 border border-spotify-gray/60 rounded-2xl p-6 text-left">
           <h2 className="text-2xl font-bold text-white mb-2">Join a Session as a Guest</h2>
           <p className="text-gray-300 text-sm mb-4">
-            Have a session code? Enter it below, choose a display name, and start adding songs without logging into Spotify.
+            Have a session code? Sign in with Clerk, and we&apos;ll use your full name to let everyone know who&apos;s adding tracks.
           </p>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-gray-400 text-sm mb-2" htmlFor="join-code">Session Code</label>
-              <input
-                id="join-code"
-                type="text"
-                value={joinCode}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  setJoinCode(e.target.value.toUpperCase());
-                  setJoinError(null);
-                }}
-                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
-                maxLength={6}
-                placeholder="ABC123"
-                className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green uppercase tracking-widest text-center font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-400 text-sm mb-2" htmlFor="guest-name">Your Name</label>
-              <input
-                id="guest-name"
-                type="text"
-                value={guestName}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  setGuestName(e.target.value);
-                  setJoinError(null);
-                }}
-                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
-                placeholder="DJ Jazzy"
-                className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
-              />
-            </div>
+          <div>
+            <label className="block text-gray-400 text-sm mb-2" htmlFor="join-code">Session Code</label>
+            <input
+              id="join-code"
+              type="text"
+              value={joinCode}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setJoinCode(e.target.value.toUpperCase());
+                setJoinError(null);
+              }}
+              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
+              maxLength={6}
+              placeholder="ABC123"
+              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green uppercase tracking-widest text-center font-mono"
+            />
           </div>
 
           {joinError && (
@@ -130,7 +244,7 @@ export default function LandingPage() {
 
           <button
             onClick={handleGuestJoin}
-            disabled={joinCode.length !== 6 || !guestName.trim() || joining}
+            disabled={joinCode.length !== 6 || joining}
             className="w-full mt-4 bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
           >
             {joining ? 'Joining...' : 'Join Session'}

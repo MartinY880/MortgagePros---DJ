@@ -1,8 +1,26 @@
 import { Request, Response } from 'express';
 import { sessionService } from '../services/session.service';
+import { clerkClient } from '../lib/clerk';
 
 export class SessionController {
-  private sanitizeName = (name?: string) => (typeof name === 'string' ? name.trim() : '');
+  private async resolveClerkFullName(userId: string) {
+    try {
+      const user = await clerkClient.users.getUser(userId);
+
+      const fullName = user.fullName
+        || [user.firstName, user.lastName].filter(Boolean).join(' ')
+        || user.username
+        || user.primaryEmailAddress?.emailAddress
+        || user.id;
+
+      const normalized = fullName?.trim();
+
+      return normalized && normalized.length > 0 ? normalized : 'Guest DJ';
+    } catch (error) {
+      console.error('Failed to resolve Clerk user name:', error);
+      return 'Guest DJ';
+    }
+  }
 
   create = async (req: Request, res: Response) => {
     try {
@@ -44,11 +62,10 @@ export class SessionController {
   joinByCode = async (req: Request, res: Response) => {
     try {
       const { code } = req.params;
-      const { name } = req.body;
-      const trimmedName = this.sanitizeName(name);
+      const clerkUserId = req.auth?.userId;
 
-      if (!trimmedName) {
-        return res.status(400).json({ error: 'Name is required' });
+      if (!clerkUserId) {
+        return res.status(401).json({ error: 'Not authenticated' });
       }
 
       const session = await sessionService.getSessionByCode(code);
@@ -57,10 +74,11 @@ export class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
+      const guestName = await this.resolveClerkFullName(clerkUserId);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
-        trimmedName
+        guestName
       );
 
       if (!req.session.guestSessions) {
@@ -82,11 +100,10 @@ export class SessionController {
   joinById = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { name } = req.body;
-      const trimmedName = this.sanitizeName(name);
+      const clerkUserId = req.auth?.userId;
 
-      if (!trimmedName) {
-        return res.status(400).json({ error: 'Name is required' });
+      if (!clerkUserId) {
+        return res.status(401).json({ error: 'Not authenticated' });
       }
 
       const session = await sessionService.getSession(id);
@@ -95,10 +112,11 @@ export class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
+      const guestName = await this.resolveClerkFullName(clerkUserId);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
-        trimmedName
+        guestName
       );
 
       if (!req.session.guestSessions) {
@@ -166,10 +184,18 @@ export class SessionController {
       const guestData = req.session.guestSessions?.[session.id];
 
       if (guestData) {
-        const guest = await sessionService.getGuestById(guestData.guestId);
+        let guest = await sessionService.getGuestById(guestData.guestId);
 
         if (guest) {
           // Keep name in sync if it changed outside this session
+          const clerkUserId = req.auth?.userId;
+          if (clerkUserId) {
+            const latestName = await this.resolveClerkFullName(clerkUserId);
+            if (latestName && latestName !== guest.name) {
+              guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName);
+            }
+          }
+
           if (guest.name !== guestData.name) {
             req.session.guestSessions![session.id] = {
               guestId: guest.id,

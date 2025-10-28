@@ -5,6 +5,32 @@ const api = axios.create({
   withCredentials: true,
 });
 
+declare global {
+  interface Window {
+    Clerk?: {
+      session?: {
+        getToken: (options?: { template?: string }) => Promise<string | null>;
+      };
+    };
+  }
+}
+
+api.interceptors.request.use(async (config) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const token = await window.Clerk?.session?.getToken();
+      if (token) {
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Failed to retrieve Clerk token:', error);
+    }
+  }
+
+  return config;
+});
+
 export const authApi = {
   getAuthUrl: () => api.get('/auth/login'),
   getMe: () => api.get('/auth/me'),
@@ -40,10 +66,10 @@ export const spotifyApi = {
 };
 
 export const guestApi = {
-  joinByCode: (code: string, name: string) =>
-    api.post(`/sessions/code/${code}/join`, { name }),
-  joinById: (sessionId: string, name: string) =>
-    api.post(`/sessions/${sessionId}/join`, { name }),
+  joinByCode: (code: string) =>
+    api.post(`/sessions/code/${code}/join`),
+  joinById: (sessionId: string) =>
+    api.post(`/sessions/${sessionId}/join`),
 };
 
 export default api;

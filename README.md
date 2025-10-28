@@ -10,6 +10,7 @@ A locally hosted collaborative Spotify jukebox application with queue management
 - 👍👎 Upvote/downvote tracks
 - 🔄 Real-time synchronization across clients
 - 🎮 Host playback controls
+- 🔐 Clerk-powered authentication for hosts and guests
 
 ## Tech Stack
 
@@ -32,6 +33,7 @@ A locally hosted collaborative Spotify jukebox application with queue management
 - Node.js 18+ installed
 - Spotify Premium account (required for playback control)
 - Spotify Developer account
+- Clerk account ([https://clerk.com](https://clerk.com))
 
 ## Setup Instructions
 
@@ -61,17 +63,13 @@ npm install
 
 ### 3. Environment Configuration
 
-Create `.env` file in the `backend` folder:
+Create a single `.env` file in the **repository root** (next to `package.json`) based on `.env.example`:
 
-```env
-# Copy from backend/.env.example and fill in your values
-SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_CLIENT_SECRET=your_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:5000/api/auth/callback
-SESSION_SECRET=your_random_session_secret
-PORT=5000
-FRONTEND_URL=http://localhost:5173
+```bash
+cp .env.example .env
 ```
+
+Update the values for your Spotify credentials, Clerk keys, and any Vite `VITE_` variables. This file is shared by both the backend and frontend, making it easy to mount in Docker with `--env-file` or `env_file` in `docker-compose`.
 
 ### 4. Database Setup
 

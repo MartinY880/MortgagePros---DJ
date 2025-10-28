@@ -1,6 +1,20 @@
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const candidatePaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), '../.env'),
+  path.resolve(__dirname, '../../.env'),
+];
+
+const envPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
+
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 export const config = {
   spotify: {
@@ -19,6 +33,10 @@ export const config = {
   database: {
     url: process.env.DATABASE_URL || 'file:./dev.db',
   },
+  clerk: {
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
+    secretKey: process.env.CLERK_SECRET_KEY!,
+  },
 };
 
 // Validate required environment variables
@@ -27,6 +45,8 @@ const requiredEnvVars = [
   'SPOTIFY_CLIENT_SECRET',
   'SPOTIFY_REDIRECT_URI',
   'SESSION_SECRET',
+  'CLERK_PUBLISHABLE_KEY',
+  'CLERK_SECRET_KEY',
 ];
 
 for (const envVar of requiredEnvVars) {

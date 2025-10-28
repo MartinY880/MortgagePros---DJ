@@ -1,5 +1,5 @@
-import { ChangeEvent, KeyboardEvent, useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
 import { guestApi } from '../services/api';
 import { socketService } from '../services/socket';
@@ -9,17 +9,20 @@ import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
 import { useApiSWR } from '../hooks/useApiSWR';
+import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [showGuestModal, setShowGuestModal] = useState(false);
-  const [guestName, setGuestName] = useState('');
-  const [joiningGuest, setJoiningGuest] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
+  const [autoJoinStatus, setAutoJoinStatus] = useState<'idle' | 'pending' | 'error'>('idle');
+  const [autoJoinMessage, setAutoJoinMessage] = useState<string | null>(null);
+  const [signInPrompted, setSignInPrompted] = useState(false);
+  const { isLoaded: isUserLoaded, isSignedIn } = useUser();
+  const { openSignIn } = useClerk();
 
   const {
     data: sessionData,
@@ -45,7 +48,7 @@ export default function SessionPage() {
     error: playbackFetchError,
     mutate: mutatePlayback,
   } = useApiSWR<{ playback: PlaybackState | null; requester: PlaybackRequester | null }>(
-    sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
+    isSignedIn && sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
     { shouldRetryOnError: false }
   );
   const playback = playbackData?.playback ?? null;
@@ -56,16 +59,88 @@ export default function SessionPage() {
     error: participantError,
     mutate: mutateParticipant,
   } = useApiSWR<{ participant: SessionParticipant }>(
-    sessionId ? `/sessions/${sessionId}/participant` : null,
+    isSignedIn && sessionId ? `/sessions/${sessionId}/participant` : null,
     { revalidateOnFocus: false }
   );
   const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
+
+  const executeJoin = useCallback(async () => {
+    if (!sessionId) {
+      return;
+    }
+
+    setAutoJoinStatus('pending');
+    setAutoJoinMessage(null);
+
+    try {
+      await guestApi.joinById(sessionId);
+      await Promise.all([mutateParticipant(), mutateQueue(), mutatePlayback()]);
+      setAutoJoinStatus('idle');
+    } catch (error: any) {
+      console.error('Guest join error:', error);
+      const message = error?.response?.data?.error || 'Failed to join session. Please try again.';
+      setAutoJoinMessage(message);
+      setAutoJoinStatus('error');
+      throw error;
+    }
+  }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback]);
+
+  const invitedSessionId =
+    typeof location.state === 'object' && location.state?.fromInvite
+      ? (location.state.sessionId as string | undefined ?? sessionId ?? undefined)
+      : undefined;
+
+  useEffect(() => {
+    if (!isSignedIn || !sessionId) {
+      return;
+    }
+
+    const isInvitedFlow = Boolean(invitedSessionId) && invitedSessionId === sessionId;
+
+    if (!participant || participant.type !== 'none') {
+      return;
+    }
+
+    if (!isInvitedFlow && autoJoinStatus !== 'idle') {
+      return;
+    }
+
+    const attempt = async () => {
+      try {
+        await executeJoin();
+      } catch (error) {
+        console.warn('Automatic session join failed:', error);
+      }
+    };
+
+    void attempt();
+  }, [isSignedIn, sessionId, participant?.type, autoJoinStatus, executeJoin, invitedSessionId]);
+
+  useEffect(() => {
+    if (participant && participant.type !== 'none') {
+      setAutoJoinStatus('idle');
+      setAutoJoinMessage(null);
+    }
+  }, [participant?.type]);
 
   useEffect(() => {
     if (sessionError?.response?.status === 404) {
       navigate('/dashboard');
     }
   }, [sessionError, navigate]);
+
+  useEffect(() => {
+    if (!isUserLoaded || isSignedIn || signInPrompted) {
+      return;
+    }
+
+    setSignInPrompted(true);
+
+    void openSignIn({
+      afterSignInUrl: window.location.href,
+      afterSignUpUrl: window.location.href,
+    });
+  }, [isUserLoaded, isSignedIn, openSignIn, signInPrompted]);
 
   useEffect(() => {
     if (playbackFetchError) {
@@ -81,19 +156,7 @@ export default function SessionPage() {
   }, [playbackFetchError, playbackData]);
 
   useEffect(() => {
-    if (!participant) {
-      return;
-    }
-
-    if (participant.type === 'none') {
-      setShowGuestModal(true);
-    } else {
-      setShowGuestModal(false);
-    }
-  }, [participant?.type]);
-
-  useEffect(() => {
-    if (!sessionId || participant?.type !== 'host') {
+    if (!sessionId || !isSignedIn || participant?.type !== 'host') {
       return;
     }
 
@@ -104,10 +167,10 @@ export default function SessionPage() {
     }, KEEP_ALIVE_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [sessionId, participant?.type, mutatePlayback]);
+  }, [sessionId, participant?.type, mutatePlayback, isSignedIn]);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || !isSignedIn) {
       return;
     }
 
@@ -132,32 +195,7 @@ export default function SessionPage() {
       socketService.leaveSession(sessionId);
       socketService.disconnect();
     };
-  }, [sessionId, mutateQueue, mutatePlayback]);
-
-  const handleGuestJoin = async () => {
-    if (!guestName.trim() || !sessionId) return;
-
-    setJoiningGuest(true);
-    setJoinError(null);
-
-    try {
-      await guestApi.joinById(sessionId, guestName.trim());
-      await Promise.all([mutateParticipant(), mutateQueue(), mutatePlayback()]);
-      setGuestName('');
-      setShowGuestModal(false);
-    } catch (error: any) {
-      console.error('Guest join error:', error);
-      const message = error?.response?.data?.error || 'Failed to join session. Please try again.';
-      setJoinError(message);
-    } finally {
-      setJoiningGuest(false);
-    }
-  };
-
-  const handleRequireAccess = () => {
-    setJoinError(null);
-    setShowGuestModal(true);
-  };
+  }, [sessionId, mutateQueue, mutatePlayback, isSignedIn]);
 
   const handleCopyCode = () => {
     if (session) {
@@ -181,6 +219,62 @@ export default function SessionPage() {
         alert('Failed to copy invite link. Please copy it manually.');
       });
   };
+
+  const handleRequireAccess = async () => {
+    if (!isUserLoaded) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      try {
+        await openSignIn({
+          afterSignInUrl: window.location.href,
+          afterSignUpUrl: window.location.href,
+        });
+      } catch (error) {
+        console.error('Clerk sign-in aborted:', error);
+      }
+      return;
+    }
+
+    try {
+      await executeJoin();
+    } catch {
+      // Error message handled in executeJoin
+    }
+  };
+
+  if (!isUserLoaded) {
+    return (
+      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
+        <div className="text-white text-xl">Loading account...</div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
+        <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
+          <h2 className="text-2xl font-bold text-white">Sign in to join this session</h2>
+          <p className="text-gray-300 text-sm">
+            Sign in with Clerk so everyone can see who is adding songs.
+          </p>
+          <button
+            onClick={() => {
+              void openSignIn({
+                afterSignInUrl: window.location.href,
+                afterSignUpUrl: window.location.href,
+              });
+            }}
+            className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+          >
+            Sign in with Clerk
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (sessionLoading && !session) {
     return (
@@ -218,35 +312,6 @@ export default function SessionPage() {
 
   return (
     <div className="min-h-screen bg-spotify-dark">
-      {showGuestModal && participant?.type !== 'host' && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-spotify-gray rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-white mb-4">Join {session.name}</h2>
-            <p className="text-gray-300 text-sm mb-4">
-              Enter your name to join the party and start adding songs.
-            </p>
-            <input
-              type="text"
-              placeholder="Your name"
-              value={guestName}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setGuestName(e.target.value)}
-              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
-              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-spotify-green"
-            />
-            {joinError && (
-              <div className="text-red-400 text-sm mb-2">{joinError}</div>
-            )}
-            <button
-              onClick={handleGuestJoin}
-              disabled={!guestName.trim() || joiningGuest}
-              className="w-full bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
-            >
-              {joiningGuest ? 'Joining...' : 'Join Party'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="bg-spotify-black border-b border-spotify-gray p-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
@@ -284,11 +349,23 @@ export default function SessionPage() {
               {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
               <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
             </button>
+
+            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto p-6">
+        {autoJoinStatus === 'pending' && participant?.type === 'none' && (
+          <div className="mb-6 bg-spotify-gray/40 text-gray-200 px-4 py-3 rounded-lg text-sm">
+            Joining session…
+          </div>
+        )}
+        {autoJoinMessage && (
+          <div className="mb-6 bg-red-900/40 border border-red-500/60 text-red-100 px-4 py-3 rounded-lg text-sm">
+            {autoJoinMessage}
+          </div>
+        )}
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Queue Section */}
           <div className="lg:col-span-2 space-y-6">

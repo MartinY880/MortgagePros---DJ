@@ -4,9 +4,12 @@ import { LogOut, Plus, Users } from 'lucide-react';
 import { authApi, sessionApi } from '../services/api';
 import { User, Session } from '../types';
 import { useApiSWR } from '../hooks/useApiSWR';
+import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { isLoaded: isUserLoaded, isSignedIn } = useUser();
+  const { openSignIn, signOut } = useClerk();
   const [sessionName, setSessionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [allowExplicit, setAllowExplicit] = useState(true);
@@ -14,7 +17,7 @@ export default function Dashboard() {
   const [resumeError, setResumeError] = useState<string | null>(null);
 
   const { data: userData, error: userError, isLoading: userLoading } = useApiSWR<{ user: User }>(
-    '/auth/me',
+    isSignedIn ? '/auth/me' : null,
     {
       shouldRetryOnError: false,
     }
@@ -70,6 +73,7 @@ export default function Dashboard() {
   const handleLogout = async () => {
     try {
       await authApi.logout();
+      await signOut({ redirectUrl: '/' });
       navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -97,6 +101,38 @@ export default function Dashboard() {
     }
   };
 
+  if (!isUserLoaded) {
+    return (
+      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
+        <div className="text-white text-xl">Loading account...</div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
+        <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
+          <h2 className="text-2xl font-bold text-white">Sign in to manage sessions</h2>
+          <p className="text-gray-300 text-sm">
+            Connect with Clerk to create or join sessions.
+          </p>
+          <button
+            onClick={() => {
+              void openSignIn({
+                afterSignInUrl: window.location.href,
+                afterSignUpUrl: window.location.href,
+              });
+            }}
+            className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+          >
+            Sign in with Clerk
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (userLoading) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
@@ -116,6 +152,7 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-white">MTGPros DJ</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-300">Welcome, {user?.displayName}</span>
+            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 bg-spotify-gray hover:bg-gray-600 text-white px-4 py-2 rounded-full transition"

@@ -6,6 +6,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config';
 import { setupSocketHandlers } from './sockets/handlers';
 import { playbackService } from './services/playback.service';
+import { clerkMiddleware } from './middleware/clerk.middleware';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -36,6 +37,9 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Clerk authentication middleware
+app.use(clerkMiddleware);
 
 // Session configuration
 app.use(
