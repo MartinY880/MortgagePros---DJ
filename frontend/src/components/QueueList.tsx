@@ -6,12 +6,13 @@ interface QueueListProps {
   nextUp?: QueueItem | null;
   queue: QueueItem[];
   sessionId: string;
+  sessionHostId: string;
   onQueueUpdate: () => void;
   participant: SessionParticipant | null;
   onRequireAccess: () => void;
 }
 
-export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionId, onQueueUpdate, participant, onRequireAccess }: QueueListProps) {
+export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionId, sessionHostId, onQueueUpdate, participant, onRequireAccess }: QueueListProps) {
   const canRemove = (item: QueueItem) => {
     if (!participant) return false;
     if (participant.type === 'host') return true;
@@ -73,6 +74,22 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const resolveCurrentVote = (item: QueueItem) => {
+    if (!participant) {
+      return null;
+    }
+
+    if (participant.type === 'host') {
+      return item.votes?.find((vote) => vote.userId === sessionHostId) ?? null;
+    }
+
+    if (participant.type === 'guest' && participant.guestId) {
+      return item.votes?.find((vote) => vote.guestId === participant.guestId) ?? null;
+    }
+
+    return null;
+  };
+
   if (queue.length === 0) {
     return (
       <div className="bg-spotify-gray p-8 rounded-lg text-center">
@@ -85,7 +102,12 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
   return (
     <div className="space-y-3">
       <h2 className="text-2xl font-bold text-white mb-4">Queue ({queue.length})</h2>
-      {queue.map((item, index) => (
+      {queue.map((item, index) => {
+        const currentVote = resolveCurrentVote(item);
+        const upvoted = currentVote?.voteType === 1;
+        const downvoted = currentVote?.voteType === -1;
+
+        return (
         <div
           key={item.id}
           className="bg-spotify-gray p-4 rounded-lg flex items-center gap-4 hover:bg-opacity-80 transition"
@@ -117,7 +139,13 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleVote(item.id, 1)}
-              className="text-gray-400 hover:text-spotify-green transition p-2 rounded hover:bg-spotify-black"
+              className={`transition p-2 rounded border border-transparent ${
+                upvoted
+                  ? 'bg-spotify-green/20 text-spotify-green border-spotify-green'
+                  : 'text-gray-400 hover:text-spotify-green hover:bg-spotify-black'
+              }`}
+              aria-pressed={upvoted}
+              title={upvoted ? 'You liked this track' : 'Upvote'}
             >
               <ThumbsUp size={20} />
             </button>
@@ -132,7 +160,13 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
             
             <button
               onClick={() => handleVote(item.id, -1)}
-              className="text-gray-400 hover:text-red-500 transition p-2 rounded hover:bg-spotify-black"
+              className={`transition p-2 rounded border border-transparent ${
+                downvoted
+                  ? 'bg-red-500/20 text-red-400 border-red-500'
+                  : 'text-gray-400 hover:text-red-500 hover:bg-spotify-black'
+              }`}
+              aria-pressed={downvoted}
+              title={downvoted ? 'You disliked this track' : 'Downvote'}
             >
               <ThumbsDown size={20} />
             </button>
@@ -148,7 +182,8 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

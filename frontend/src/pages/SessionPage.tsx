@@ -388,6 +388,7 @@ export default function SessionPage() {
               nextUp={queueState.nextUp}
               queue={queueState.queue}
               sessionId={session.id}
+              sessionHostId={session.host.id}
               onQueueUpdate={() => { void refreshQueue(); }}
               participant={participant}
               onRequireAccess={handleRequireAccess}
