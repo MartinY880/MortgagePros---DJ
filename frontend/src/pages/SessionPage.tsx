@@ -8,8 +8,9 @@ import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
+import Leaderboard from '../components/Leaderboard';
 import { useApiSWR } from '../hooks/useApiSWR';
-import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -137,8 +138,7 @@ export default function SessionPage() {
     setSignInPrompted(true);
 
     void openSignIn({
-      afterSignInUrl: window.location.href,
-      afterSignUpUrl: window.location.href,
+      forceRedirectUrl: window.location.href,
     });
   }, [isUserLoaded, isSignedIn, openSignIn, signInPrompted]);
 
@@ -228,8 +228,7 @@ export default function SessionPage() {
     if (!isSignedIn) {
       try {
         await openSignIn({
-          afterSignInUrl: window.location.href,
-          afterSignUpUrl: window.location.href,
+          forceRedirectUrl: window.location.href,
         });
       } catch (error) {
         console.error('Clerk sign-in aborted:', error);
@@ -263,8 +262,7 @@ export default function SessionPage() {
           <button
             onClick={() => {
               void openSignIn({
-                afterSignInUrl: window.location.href,
-                afterSignUpUrl: window.location.href,
+                forceRedirectUrl: window.location.href,
               });
             }}
             className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
@@ -350,7 +348,6 @@ export default function SessionPage() {
               <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
             </button>
 
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
           </div>
         </div>
       </header>
@@ -382,6 +379,7 @@ export default function SessionPage() {
             <NextUp track={queueState.nextUp} />
             <SearchBar
               sessionId={session.id}
+              allowExplicit={session.allowExplicit}
               onTrackAdded={() => { void refreshQueue(); }}
               canSearch={participant?.type === 'host' || participant?.type === 'guest'}
               onRequireAccess={handleRequireAccess}
@@ -398,15 +396,11 @@ export default function SessionPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <div className="bg-spotify-gray p-6 rounded-lg">
-              <h3 className="text-xl font-bold text-white mb-4">How it works</h3>
-              <ul className="space-y-3 text-gray-300 text-sm">
-                <li>🔍 Search for songs to add to the queue</li>
-                <li>👍 Vote on tracks you want to hear</li>
-                <li>🎵 Top voted songs play first</li>
-                <li>🎪 Share the session code with friends</li>
-              </ul>
-            </div>
+            <Leaderboard
+              sessionId={session.id}
+              title="Performance Leaderboard"
+              description="Live production stats for everyone in this session. Values refresh automatically when the leaderboard endpoint is wired up."
+            />
 
             <div className="bg-spotify-gray p-6 rounded-lg">
               <h3 className="text-xl font-bold text-white mb-2">Queue Stats</h3>

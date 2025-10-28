@@ -2,7 +2,7 @@ import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useState } from 're
 import { useLocation, useNavigate } from 'react-router-dom';
 import { authApi, guestApi } from '../services/api';
 import { Session } from '../types';
-import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
 type LandingLocationState = {
   requireSignIn?: boolean;
@@ -31,7 +31,8 @@ export default function LandingPage() {
   const [pendingAction, setPendingAction] = useState<'host' | 'guest' | null>(null);
   const [handledAuthRedirect, setHandledAuthRedirect] = useState(false);
   const { isLoaded, isSignedIn } = useUser();
-  const { openSignIn } = useClerk();
+  const { openSignIn, signOut } = useClerk();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const startSpotifyConnect = useCallback(async () => {
     try {
@@ -92,6 +93,27 @@ export default function LandingPage() {
     void run();
   }, [pendingAction, isSignedIn, startSpotifyConnect, attemptGuestJoin]);
 
+  const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout request failed:', error);
+    } finally {
+      try {
+        await signOut({ redirectUrl: '/' });
+      } catch (error) {
+        console.error('Clerk sign-out failed:', error);
+      }
+      setLoggingOut(false);
+    }
+  };
+
   const promptClerkSignIn = async (action: 'host' | 'guest', redirectPath?: string) => {
     if (!isLoaded) {
       return;
@@ -101,8 +123,7 @@ export default function LandingPage() {
 
     try {
       await openSignIn({
-        afterSignInUrl: resolveAfterAuthUrl(redirectPath),
-        afterSignUpUrl: resolveAfterAuthUrl(redirectPath),
+        forceRedirectUrl: resolveAfterAuthUrl(redirectPath),
       });
     } catch (error) {
       console.error('Clerk sign-in aborted:', error);
@@ -158,8 +179,7 @@ export default function LandingPage() {
 
       try {
         await openSignIn({
-          afterSignInUrl: targetUrl,
-          afterSignUpUrl: targetUrl,
+          forceRedirectUrl: targetUrl,
         });
       } catch (error) {
         console.error('Clerk sign-in aborted:', error);
@@ -183,7 +203,13 @@ export default function LandingPage() {
       <div className="max-w-2xl w-full text-center">
         {isLoaded && isSignedIn && (
           <div className="flex justify-end mb-4">
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="bg-spotify-gray hover:bg-gray-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-full transition"
+            >
+              {loggingOut ? 'Signing out…' : 'Logout'}
+            </button>
           </div>
         )}
         <div className="mb-8 flex justify-center">
@@ -256,12 +282,12 @@ export default function LandingPage() {
             <h3 className="text-xl font-bold mb-2 text-spotify-green">🎪 Host Sessions</h3>
             <p className="text-gray-300">Create a jukebox session and share the code with friends</p>
           </div>
-          
+
           <div className="bg-spotify-gray p-6 rounded-lg">
             <h3 className="text-xl font-bold mb-2 text-spotify-green">🎵 Add Songs</h3>
             <p className="text-gray-300">Search and add tracks to the collaborative queue</p>
           </div>
-          
+
           <div className="bg-spotify-gray p-6 rounded-lg">
             <h3 className="text-xl font-bold mb-2 text-spotify-green">👍 Vote</h3>
             <p className="text-gray-300">Upvote your favorites - top songs play first!</p>

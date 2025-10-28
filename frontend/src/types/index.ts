@@ -75,6 +75,7 @@ export interface SpotifyTrack {
   };
   duration_ms: number;
   uri: string;
+  explicit: boolean;
 }
 
 export interface PlaybackState {
@@ -86,4 +87,13 @@ export interface PlaybackState {
 export interface PlaybackRequester {
   type: 'host' | 'guest' | 'unknown';
   name: string;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  fullName: string;
+  dials: number;
+  appOuts: number;
+  underwriting: number;
+  totalPoints: number;
 }

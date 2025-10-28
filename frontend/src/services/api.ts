@@ -1,9 +1,39 @@
 import axios from 'axios';
 
+let apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
+let socketBaseUrl = import.meta.env.VITE_SOCKET_URL || null;
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: apiBaseUrl,
   withCredentials: true,
 });
+
+const deriveSocketUrl = () => {
+  if (socketBaseUrl) {
+    return socketBaseUrl;
+  }
+
+  if (apiBaseUrl.endsWith('/api')) {
+    return apiBaseUrl.slice(0, -4);
+  }
+
+  return apiBaseUrl;
+};
+
+export function configureFrontendApi(config: { apiBaseUrl?: string; socketUrl?: string }) {
+  if (config.apiBaseUrl) {
+    apiBaseUrl = config.apiBaseUrl;
+    api.defaults.baseURL = apiBaseUrl;
+  }
+
+  if (config.socketUrl) {
+    socketBaseUrl = config.socketUrl;
+  }
+}
+
+export function getSocketUrl() {
+  return deriveSocketUrl();
+}
 
 declare global {
   interface Window {
@@ -70,6 +100,11 @@ export const guestApi = {
     api.post(`/sessions/code/${code}/join`),
   joinById: (sessionId: string) =>
     api.post(`/sessions/${sessionId}/join`),
+};
+
+export const leaderboardApi = {
+  getLeaderboard: (sessionId?: string) =>
+    api.get(sessionId ? `/sessions/${sessionId}/leaderboard` : '/stats/leaderboard'),
 };
 
 export default api;

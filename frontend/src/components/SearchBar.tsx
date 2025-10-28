@@ -7,12 +7,13 @@ import { SpotifyTrack } from '../types';
 
 interface SearchBarProps {
   sessionId: string;
+  allowExplicit: boolean;
   onTrackAdded: () => void;
   canSearch: boolean;
   onRequireAccess: () => void;
 }
 
-export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
+export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -119,6 +120,11 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
             />
           </div>
         </div>
+        {!allowExplicit && (
+          <p className="mt-2 text-xs text-gray-400">
+            Explicit tracks are disabled for this session and will be shown but cannot be added.
+          </p>
+        )}
       </div>
 
       {/* Search Results */}
@@ -133,31 +139,73 @@ export default function SearchBar({ sessionId, onTrackAdded, canSearch, onRequir
             </div>
           ) : (
             <div className="p-2">
-              {results.map((track: SpotifyTrack) => (
-                <div
-                  key={track.id}
-                  className="flex items-center gap-3 p-3 hover:bg-spotify-black rounded-lg transition cursor-pointer"
-                  onClick={() => handleAddTrack(track.id)}
-                >
-                  {track.album.images[2] && (
-                    <img
-                      src={track.album.images[2].url}
-                      alt={track.name}
-                      className="w-12 h-12 rounded"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-white font-semibold truncate">{track.name}</h4>
-                    <p className="text-gray-400 text-sm truncate">
-                      {track.artists.map((a) => a.name).join(', ')}
-                    </p>
+              {results.map((track: SpotifyTrack) => {
+                const isExplicit = Boolean(track.explicit);
+                const disabled = isExplicit && !allowExplicit;
+
+                return (
+                  <div
+                    key={track.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg transition ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'hover:bg-spotify-black cursor-pointer'}`}
+                    onClick={() => {
+                      if (disabled) {
+                        return;
+                      }
+                      void handleAddTrack(track.id);
+                    }}
+                    role="button"
+                    aria-disabled={disabled}
+                    tabIndex={disabled ? -1 : 0}
+                    onKeyDown={(event) => {
+                      if (disabled) {
+                        return;
+                      }
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        void handleAddTrack(track.id);
+                      }
+                    }}
+                    title={disabled ? 'Explicit tracks are disabled for this session' : undefined}
+                  >
+                    {track.album.images[2] && (
+                      <img
+                        src={track.album.images[2].url}
+                        alt={track.name}
+                        className="w-12 h-12 rounded"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-white font-semibold truncate">{track.name}</h4>
+                        {isExplicit && (
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${disabled ? 'bg-gray-700 text-gray-300' : 'bg-spotify-green/20 text-spotify-green'}`}>
+                            Explicit
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-400 text-sm truncate">
+                        {track.artists.map((a) => a.name).join(', ')}
+                      </p>
+                    </div>
+                    <span className="text-gray-400 text-sm">{formatDuration(track.duration_ms)}</span>
+                    <button
+                      type="button"
+                      className={`p-2 transition ${disabled ? 'text-gray-500 cursor-not-allowed' : 'text-spotify-green hover:text-spotify-hover'}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (disabled) {
+                          return;
+                        }
+                        void handleAddTrack(track.id);
+                      }}
+                      disabled={disabled}
+                      aria-label={disabled ? 'Explicit tracks disabled' : 'Add to queue'}
+                    >
+                      <Plus size={24} />
+                    </button>
                   </div>
-                  <span className="text-gray-400 text-sm">{formatDuration(track.duration_ms)}</span>
-                  <button className="text-spotify-green hover:text-spotify-hover transition p-2">
-                    <Plus size={24} />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           <button

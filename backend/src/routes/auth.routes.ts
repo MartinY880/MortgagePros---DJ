@@ -5,7 +5,7 @@ import { requireClerkAuth } from '../middleware/clerk.middleware';
 
 const router = Router();
 
-router.get('/login', requireClerkAuth, authController.login);
+router.get('/login', authController.login);
 router.get('/callback', authController.callback);
 router.get('/me', requireClerkAuth, requireAuth, authController.me);
 router.post('/logout', requireClerkAuth, authController.logout);

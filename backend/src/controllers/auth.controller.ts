@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { spotifyService } from '../services/spotify.service';
+import { config } from '../config';
 
 const prisma = new PrismaClient();
 
@@ -56,12 +57,10 @@ export class AuthController {
       req.session.userId = user.id;
 
       // Redirect to frontend
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      res.redirect(`${frontendUrl}/dashboard`);
+      res.redirect(`${config.server.frontendUrl}/dashboard`);
     } catch (error) {
       console.error('Callback error:', error);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      res.redirect(`${frontendUrl}?error=auth_failed`);
+      res.redirect(`${config.server.frontendUrl}?error=auth_failed`);
     }
   }
 

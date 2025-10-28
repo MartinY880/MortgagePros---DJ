@@ -4,7 +4,7 @@ import { LogOut, Plus, Users } from 'lucide-react';
 import { authApi, sessionApi } from '../services/api';
 import { User, Session } from '../types';
 import { useApiSWR } from '../hooks/useApiSWR';
-import { useClerk, useUser, UserButton } from '@clerk/clerk-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -120,8 +120,7 @@ export default function Dashboard() {
           <button
             onClick={() => {
               void openSignIn({
-                afterSignInUrl: window.location.href,
-                afterSignUpUrl: window.location.href,
+                forceRedirectUrl: window.location.href,
               });
             }}
             className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
@@ -152,7 +151,6 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-white">MTGPros DJ</h1>
           <div className="flex items-center gap-4">
             <span className="text-gray-300">Welcome, {user?.displayName}</span>
-            <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: 'border border-spotify-green' } }} />
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 bg-spotify-gray hover:bg-gray-600 text-white px-4 py-2 rounded-full transition"

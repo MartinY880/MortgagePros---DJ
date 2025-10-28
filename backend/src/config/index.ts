@@ -16,6 +16,67 @@ if (envPath) {
   dotenv.config();
 }
 
+const rawFrontendUrl = process.env.FRONTEND_URL?.trim();
+const rawFrontendOrigins = process.env.FRONTEND_ORIGINS;
+
+const normalizeOrigin = (origin: string) => origin.replace(/\/$/, '').toLowerCase();
+const normalizeUrl = (url: string) => url.replace(/\/+$/, '');
+
+const originCandidates: Array<string | undefined> = [
+  rawFrontendUrl,
+  ...(rawFrontendOrigins ? rawFrontendOrigins.split(',') : []),
+  !rawFrontendUrl && !rawFrontendOrigins ? 'http://localhost:5173' : undefined,
+];
+
+const frontendOrigins = originCandidates
+  .map((origin) => origin?.trim() ?? '')
+  .filter((origin) => origin.length > 0);
+
+const uniqueFrontendOrigins = Array.from(new Set(frontendOrigins.map(normalizeOrigin)));
+
+if (uniqueFrontendOrigins.length === 0) {
+  throw new Error('At least one FRONTEND_URL/FRONTEND_ORIGINS value must be provided');
+}
+
+const primaryFrontendUrl = rawFrontendUrl && rawFrontendUrl.length > 0
+  ? normalizeOrigin(rawFrontendUrl)
+  : uniqueFrontendOrigins[0];
+
+const apiBaseUrlCandidate = process.env.FRONTEND_API_BASE_URL
+  ? normalizeUrl(process.env.FRONTEND_API_BASE_URL)
+  : undefined;
+
+const socketUrlCandidate = process.env.FRONTEND_SOCKET_URL
+  ? normalizeUrl(process.env.FRONTEND_SOCKET_URL)
+  : undefined;
+
+const apiBaseUrl = apiBaseUrlCandidate ?? '/api';
+
+const deriveSocketUrl = () => {
+  if (socketUrlCandidate) {
+    return socketUrlCandidate;
+  }
+
+  if (apiBaseUrl.startsWith('http') && apiBaseUrl.endsWith('/api')) {
+    return apiBaseUrl.slice(0, -4);
+  }
+
+  if (apiBaseUrl.startsWith('/')) {
+    return '/';
+  }
+
+  return apiBaseUrl;
+};
+
+const socketUrl = deriveSocketUrl();
+
+const frontendClerkPublishableKey = process.env.FRONTEND_CLERK_PUBLISHABLE_KEY
+  || process.env.CLERK_PUBLISHABLE_KEY;
+
+if (!frontendClerkPublishableKey) {
+  throw new Error('Missing frontend Clerk publishable key. Set FRONTEND_CLERK_PUBLISHABLE_KEY or CLERK_PUBLISHABLE_KEY.');
+}
+
 export const config = {
   spotify: {
     clientId: process.env.SPOTIFY_CLIENT_ID!,
@@ -25,7 +86,8 @@ export const config = {
   server: {
     port: parseInt(process.env.PORT || '5000'),
     nodeEnv: process.env.NODE_ENV || 'development',
-    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+    frontendUrl: primaryFrontendUrl,
+    frontendOrigins: uniqueFrontendOrigins,
   },
   session: {
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
@@ -36,6 +98,11 @@ export const config = {
   clerk: {
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
     secretKey: process.env.CLERK_SECRET_KEY!,
+  },
+  frontend: {
+    apiBaseUrl,
+    socketUrl,
+    clerkPublishableKey: frontendClerkPublishableKey!,
   },
 };
 

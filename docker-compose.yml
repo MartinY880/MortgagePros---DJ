@@ -34,23 +34,28 @@ services:
     
     environment:
       # Spotify API Credentials (REQUIRED)
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      SPOTIFY_CLIENT_ID: "${SPOTIFY_CLIENT_ID}"
+      SPOTIFY_CLIENT_SECRET: "${SPOTIFY_CLIENT_SECRET}"
       # Update this to your domain when using Traefik
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-https://api-dj.pros.mortgage/api/auth/callback}
-      
+      SPOTIFY_REDIRECT_URI: "${SPOTIFY_REDIRECT_URI:-https://api-dj.pros.mortgage/api/auth/callback}"
+
       # Server Configuration
-      - PORT=5000
-      - NODE_ENV=${NODE_ENV:-production}
-      
-      # Session Secret (REQUIRED - generate a random string)
-      - SESSION_SECRET=${SESSION_SECRET}
-      
+      PORT: "5000"
+      NODE_ENV: "${NODE_ENV:-production}"
+      SESSION_SECRET: "${SESSION_SECRET}"
+      CLERK_PUBLISHABLE_KEY: "${CLERK_PUBLISHABLE_KEY}"
+      CLERK_SECRET_KEY: "${CLERK_SECRET_KEY}"
+
       # Frontend URL - Update this to your domain when using Traefik
-      - FRONTEND_URL=${FRONTEND_URL:-https://dj.pros.mortgage}
-      
-      # Database
-      - DATABASE_URL=file:/app/backend/data/prod.db
+      FRONTEND_URL: "${FRONTEND_URL:-https://dj.pros.mortgage}"
+      # Comma-separated list of allowed frontend origins (include every domain hitting the API)
+      FRONTEND_ORIGINS: "${FRONTEND_ORIGINS:-https://dj.pros.mortgage,https://dj-dev.pros.mortgage}"
+      # Frontend runtime configuration exposed through /api/config
+      FRONTEND_API_BASE_URL: "${FRONTEND_API_BASE_URL:-https://api-dj.pros.mortgage/api}"
+      FRONTEND_SOCKET_URL: "${FRONTEND_SOCKET_URL:-https://api-dj.pros.mortgage}"
+
+      # Database (override via .env if needed)
+      DATABASE_URL: "${DATABASE_URL:-file:/app/backend/data/prod.db}"
     
     volumes:
       # Persist database to local directory

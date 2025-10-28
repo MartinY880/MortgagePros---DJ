@@ -8,21 +8,30 @@ export class SessionService {
   async createSession(hostId: string, name: string, options?: { allowExplicit?: boolean }) {
     const code = generateCode();
 
-    const session = await prisma.session.create({
-      data: {
-        code,
-        name,
-        hostId,
-        ...(typeof options?.allowExplicit === 'boolean' ? { allowExplicit: options.allowExplicit } : {}),
-      },
-      include: {
-        host: {
-          select: {
-            id: true,
-            displayName: true,
+    const session = await prisma.$transaction(async (tx) => {
+      const created = await tx.session.create({
+        data: {
+          code,
+          name,
+          hostId,
+          ...(typeof options?.allowExplicit === 'boolean' ? { allowExplicit: options.allowExplicit } : {}),
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              displayName: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.user.update({
+        where: { id: hostId },
+        data: { lastActiveSessionId: created.id },
+      } as any);
+
+      return created;
     });
 
     return session;
@@ -61,6 +70,29 @@ export class SessionService {
   }
 
   async getMostRecentSession(hostId: string) {
+    const userWithLast = await prisma.user.findUnique({
+      where: { id: hostId },
+      select: { lastActiveSessionId: true },
+    } as any) as ({ lastActiveSessionId: string | null } | null);
+
+    if (userWithLast?.lastActiveSessionId) {
+      const session = await prisma.session.findUnique({
+        where: { id: userWithLast.lastActiveSessionId },
+        include: {
+          host: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+      });
+
+      if (session) {
+        return session;
+      }
+    }
+
     return prisma.session.findFirst({
       where: { hostId },
       orderBy: {
@@ -78,20 +110,31 @@ export class SessionService {
   }
 
   async deleteSession(sessionId: string, userId: string) {
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-    });
+    await prisma.$transaction(async (tx) => {
+      const session = await tx.session.findUnique({
+        where: { id: sessionId },
+      });
 
-    if (!session) {
-      throw new Error('Session not found');
-    }
+      if (!session) {
+        throw new Error('Session not found');
+      }
 
-    if (session.hostId !== userId) {
-      throw new Error('Only the host can delete the session');
-    }
+      if (session.hostId !== userId) {
+        throw new Error('Only the host can delete the session');
+      }
 
-    await prisma.session.delete({
-      where: { id: sessionId },
+      await tx.session.delete({
+        where: { id: sessionId },
+      });
+
+      if (session.id === sessionId) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            lastActiveSessionId: null,
+          },
+        } as any);
+      }
     });
   }
 
@@ -127,17 +170,26 @@ export class SessionService {
       return session;
     }
 
-    return prisma.session.update({
-      where: { id: sessionId },
-      data: { isActive: true },
-      include: {
-        host: {
-          select: {
-            id: true,
-            displayName: true,
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.session.update({
+        where: { id: sessionId },
+        data: { isActive: true },
+        include: {
+          host: {
+            select: {
+              id: true,
+              displayName: true,
+            },
           },
         },
-      },
+      });
+
+      await tx.user.update({
+        where: { id: hostId },
+        data: { lastActiveSessionId: updated.id },
+      } as any);
+
+      return updated;
     });
   }
 

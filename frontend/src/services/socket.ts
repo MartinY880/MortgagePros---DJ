@@ -1,14 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 import { QueueState, PlaybackState, PlaybackRequester } from '../types';
+import { getSocketUrl } from './api';
 
 class SocketService {
   private socket: Socket | null = null;
 
   connect() {
     if (!this.socket) {
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 
-                        (import.meta.env.VITE_API_URL?.replace('/api', '')) || 
-                        window.location.origin;
+  const socketUrl = getSocketUrl() || window.location.origin;
       
       this.socket = io(socketUrl, {
         withCredentials: true,
