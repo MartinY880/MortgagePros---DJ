@@ -15,5 +15,6 @@ router.get('/:id', sessionController.getById);
 router.get('/code/:code', sessionController.getByCode);
 router.delete('/:id', requireClerkAuth, requireAuth, sessionController.delete);
 router.post('/:id/settings', requireClerkAuth, requireAuth, sessionController.updateSettings);
+router.post('/:id/guest-credits', requireClerkAuth, requireAuth, sessionController.grantGuestCredits);
 
 export default router;

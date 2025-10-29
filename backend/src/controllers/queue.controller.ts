@@ -5,6 +5,7 @@ import { sessionService } from '../services/session.service';
 import { playbackService } from '../services/playback.service';
 import { broadcastQueueUpdate } from '../sockets/handlers';
 import { Server as SocketIOServer } from 'socket.io';
+import { creditService, CreditError, CreditState, GUEST_TRACK_COST, VOTE_REACTION_COST } from '../services/credit.service';
 
 export class QueueController {
   private resolveSessionActor = async (req: Request, sessionId: string) => {
@@ -70,6 +71,10 @@ export class QueueController {
         return res.status(400).json({ error: 'Track ID is required' });
       }
 
+      if ((req as any)._spentCreditsForQueue) {
+        delete (req as any)._spentCreditsForQueue;
+      }
+
       const context = await this.resolveSessionActor(req, sessionId);
 
       if ('error' in context) {
@@ -80,8 +85,10 @@ export class QueueController {
       const { session, actor, role } = context;
       const allowExplicit = (session as any).allowExplicit ?? true;
       const queuedBefore = await queueService.countActiveQueueItems(sessionId);
+      const clerkUserId = req.auth?.userId ?? null;
+      let guestCreditState: CreditState | null = null;
 
-    playbackService.ensureMonitor(sessionId, session.hostId);
+      playbackService.ensureMonitor(sessionId, session.hostId);
 
       // Guests use the host's Spotify credentials
       const accessToken = await spotifyService.ensureValidToken(session.hostId);
@@ -89,6 +96,25 @@ export class QueueController {
 
       if (!allowExplicit && track.explicit) {
         return res.status(400).json({ error: 'Explicit tracks are disabled for this session' });
+      }
+
+      if (role === 'guest') {
+        if (!clerkUserId) {
+          return res.status(401).json({ error: 'Not authenticated' });
+        }
+
+        try {
+          guestCreditState = await creditService.spendCredits(clerkUserId, GUEST_TRACK_COST);
+          (req as any)._spentCreditsForQueue = {
+            amount: GUEST_TRACK_COST,
+            clerkUserId,
+          };
+        } catch (error) {
+          if (error instanceof CreditError) {
+            return res.status(error.status).json({ error: error.message });
+          }
+          throw error;
+        }
       }
 
       // Add to queue
@@ -118,9 +144,40 @@ export class QueueController {
 
       playbackService.requestImmediateSync(sessionId);
 
-      res.json({ queueItem, role, nextUp: state.nextUp, queue: state.queue });
+      const payload: Record<string, unknown> = {
+        queueItem,
+        role,
+        nextUp: state.nextUp,
+        queue: state.queue,
+      };
+
+      if (guestCreditState) {
+        payload.credits = guestCreditState;
+      }
+
+      if ((req as any)._spentCreditsForQueue) {
+        delete (req as any)._spentCreditsForQueue;
+      }
+
+      res.json(payload);
     } catch (error: any) {
       console.error('Add to queue error:', error);
+
+      if (error instanceof CreditError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+
+      const spentInfo = (req as any)._spentCreditsForQueue as { amount: number; clerkUserId: string } | undefined;
+      if (spentInfo) {
+        try {
+          await creditService.addCredits(spentInfo.clerkUserId, spentInfo.amount);
+        } catch (refundError) {
+          console.error('Failed to refund credits after queue error:', refundError);
+        } finally {
+          delete (req as any)._spentCreditsForQueue;
+        }
+      }
+
       res.status(error.message === 'Track already in queue' ? 400 : 500)
         .json({ error: error.message || 'Failed to add to queue' });
     }
@@ -160,12 +217,47 @@ export class QueueController {
 
       await queueService.removeFromQueue(queueItemId, context.actor);
 
+      const queueItemData = queueItem as any;
+      let actorCredits: CreditState | null = null;
+      const removingClerkUserId = req.auth?.userId;
+      let guestClerkUserId = queueItemData.addedByGuest?.clerkUserId ?? null;
+
+      if (!guestClerkUserId && queueItem.addedByGuestId) {
+        try {
+          const guestRecord = await sessionService.getGuestById(queueItem.addedByGuestId);
+          guestClerkUserId = guestRecord?.clerkUserId ?? null;
+        } catch (lookupError) {
+          console.error('Failed to resolve guest Clerk ID for refund:', lookupError);
+        }
+      }
+
+      if (guestClerkUserId) {
+        try {
+          const credits = await creditService.addCredits(guestClerkUserId, GUEST_TRACK_COST);
+          if (removingClerkUserId && removingClerkUserId === guestClerkUserId) {
+            actorCredits = credits;
+          }
+        } catch (refundError) {
+          console.error('Failed to refund credits after queue removal:', refundError);
+        }
+      }
+
       if (queueItem.session.isActive) {
         playbackService.ensureMonitor(queueItem.sessionId, queueItem.session.hostId);
       }
       const state = await this.emitQueueState(req, queueItem.sessionId);
       playbackService.requestImmediateSync(queueItem.sessionId);
-      res.json({ message: 'Removed from queue', nextUp: state.nextUp, queue: state.queue });
+      const payload: Record<string, unknown> = {
+        message: 'Removed from queue',
+        nextUp: state.nextUp,
+        queue: state.queue,
+      };
+
+      if (actorCredits) {
+        payload.credits = actorCredits;
+      }
+
+      res.json(payload);
     } catch (error: any) {
       console.error('Remove from queue error:', error);
       res.status(error.message === 'Not authorized to remove this track' ? 403 : 500)
@@ -174,6 +266,8 @@ export class QueueController {
   };
 
   vote = async (req: Request, res: Response) => {
+    let spentVoteCredits: { amount: number; clerkUserId: string } | null = null;
+
     try {
       const { queueItemId } = req.params;
       const { voteType } = req.body;
@@ -195,12 +289,73 @@ export class QueueController {
           .json({ error: context.error });
       }
 
-      const result = await queueService.vote(queueItemId, context.actor, voteType);
+      const { actor, role } = context;
+
+      let clerkUserId: string | null = null;
+      let actorCredits: CreditState | null = null;
+
+      if (role === 'host') {
+        clerkUserId = req.auth?.userId ?? null;
+      } else if (role === 'guest' && actor.guestId) {
+        const guest = await sessionService.getGuestById(actor.guestId);
+        clerkUserId = guest?.clerkUserId ?? null;
+      }
+
+      const result = await queueService.vote(queueItemId, actor, voteType, {
+        beforeChange: async (intent) => {
+          if (!clerkUserId || intent.action !== 'add') {
+            return;
+          }
+
+          const credits = await creditService.spendCredits(clerkUserId, VOTE_REACTION_COST);
+          spentVoteCredits = { amount: VOTE_REACTION_COST, clerkUserId };
+
+          if (clerkUserId === req.auth?.userId) {
+            actorCredits = credits;
+          }
+        },
+      });
+
+      if (result.action === 'removed' && clerkUserId) {
+        const credits = await creditService.addCredits(clerkUserId, VOTE_REACTION_COST);
+        if (clerkUserId === req.auth?.userId) {
+          actorCredits = credits;
+        }
+      }
+
+      spentVoteCredits = null;
+
       const state = await this.emitQueueState(req, queueItem.sessionId);
-  playbackService.requestImmediateSync(queueItem.sessionId);
-      res.json({ ...result, nextUp: state.nextUp, queue: state.queue });
+      playbackService.requestImmediateSync(queueItem.sessionId);
+
+      const payload: Record<string, unknown> = {
+        ...result,
+        nextUp: state.nextUp,
+        queue: state.queue,
+      };
+
+      if (actorCredits) {
+        payload.credits = actorCredits;
+      }
+
+      res.json(payload);
     } catch (error) {
       console.error('Vote error:', error);
+
+      if (spentVoteCredits) {
+        const { clerkUserId: refundUserId, amount } = spentVoteCredits;
+        try {
+          await creditService.addCredits(refundUserId, amount);
+        } catch (refundError) {
+          console.error('Failed to refund vote credits after error:', refundError);
+        }
+        spentVoteCredits = null;
+      }
+
+      if (error instanceof CreditError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+
       res.status(500).json({ error: 'Failed to vote' });
     }
   };

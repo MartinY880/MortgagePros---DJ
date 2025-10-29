@@ -42,6 +42,7 @@ export interface QueueItem {
   addedByGuest?: {
     id: string;
     name: string;
+    clerkUserId?: string | null;
   };
   votes?: Vote[];
 }
@@ -54,10 +55,17 @@ export interface Vote {
   voteType: number;
 }
 
+export interface CreditState {
+  totalCredits: number;
+  currentCredits: number;
+  refreshDate: string;
+}
+
 export interface SessionParticipant {
   type: 'host' | 'guest' | 'none';
   name?: string;
   guestId?: string;
+  credits?: CreditState;
 }
 
 export interface QueueState {

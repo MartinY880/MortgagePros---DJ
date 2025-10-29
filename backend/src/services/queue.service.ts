@@ -14,6 +14,7 @@ export class QueueService {
         select: {
           id: true,
           name: true,
+          clerkUserId: true,
         },
       },
       votes: true,
@@ -238,7 +239,21 @@ export class QueueService {
   async vote(
     queueItemId: string,
     actor: { userId?: string; guestId?: string },
-    voteType: number
+    voteType: number,
+    hooks?: {
+      beforeChange?: (intent: {
+        action: 'add' | 'remove' | 'change';
+        voteType: number;
+        previousVoteType: number | null;
+        actorType: 'user' | 'guest';
+      }) => Promise<void> | void;
+      afterChange?: (result: {
+        action: 'added' | 'removed' | 'changed';
+        voteType: number;
+        previousVoteType: number | null;
+        actorType: 'user' | 'guest';
+      }) => Promise<void> | void;
+    }
   ) {
     if (!actor.userId && !actor.guestId) {
       throw new Error('Not authorized to vote');
@@ -246,87 +261,86 @@ export class QueueService {
 
     const voteModel = (prisma as any).vote;
 
-    if (actor.userId) {
+    const applyChange = async (
+      actorType: 'user' | 'guest',
+      identifier: { userId: string } | { guestId: string }
+    ) => {
+      const whereKey = actorType === 'user'
+        ? {
+            queueItemId_userId: {
+              queueItemId,
+              userId: (identifier as { userId: string }).userId,
+            },
+          }
+        : {
+            queueItemId_guestId: {
+              queueItemId,
+              guestId: (identifier as { guestId: string }).guestId,
+            },
+          };
+
       const existingVote = await voteModel.findUnique({
-        where: {
-          queueItemId_userId: {
-            queueItemId,
-            userId: actor.userId,
-          },
-        },
+        where: whereKey,
       });
 
+      let intent: 'add' | 'remove' | 'change' = 'add';
       if (existingVote) {
-        if (existingVote.voteType === voteType) {
-          await voteModel.delete({
-            where: { id: existingVote.id },
-          });
-          await this.updateVoteScore(queueItemId);
-          const voteScore = await this.getVoteScore(queueItemId);
-          return { action: 'removed', voteType, voteScore };
-        }
+        intent = existingVote.voteType === voteType ? 'remove' : 'change';
+      }
 
+      const voteIntent = {
+        action: intent,
+        voteType,
+        previousVoteType: existingVote?.voteType ?? null,
+        actorType,
+      } as const;
+
+      await hooks?.beforeChange?.(voteIntent);
+
+      let resultAction: 'added' | 'removed' | 'changed';
+
+      if (intent === 'remove' && existingVote) {
+        await voteModel.delete({
+          where: { id: existingVote.id },
+        });
+        resultAction = 'removed';
+      } else if (intent === 'change' && existingVote) {
         await voteModel.update({
           where: { id: existingVote.id },
           data: { voteType },
         });
-        await this.updateVoteScore(queueItemId);
-        const voteScore = await this.getVoteScore(queueItemId);
-        return { action: 'changed', voteType, voteScore };
-      }
-
-      await voteModel.create({
-        data: {
-          queueItemId,
-          userId: actor.userId,
-          voteType,
-        },
-      });
-
-      await this.updateVoteScore(queueItemId);
-      const voteScore = await this.getVoteScore(queueItemId);
-      return { action: 'added', voteType, voteScore };
-    }
-
-    const existingGuestVote = await voteModel.findUnique({
-      where: {
-        queueItemId_guestId: {
-          queueItemId,
-          guestId: actor.guestId!,
-        },
-      },
-    });
-
-    if (existingGuestVote) {
-      if (existingGuestVote.voteType === voteType) {
-        await voteModel.delete({
-          where: { id: existingGuestVote.id },
+        resultAction = 'changed';
+      } else {
+        await voteModel.create({
+          data: {
+            queueItemId,
+            voteType,
+            ...(actorType === 'user'
+              ? { userId: (identifier as { userId: string }).userId }
+              : { guestId: (identifier as { guestId: string }).guestId }),
+          },
         });
-        await this.updateVoteScore(queueItemId);
-        const voteScore = await this.getVoteScore(queueItemId);
-        return { action: 'removed', voteType, voteScore };
+        resultAction = 'added';
       }
 
-      await voteModel.update({
-        where: { id: existingGuestVote.id },
-        data: { voteType },
-      });
       await this.updateVoteScore(queueItemId);
       const voteScore = await this.getVoteScore(queueItemId);
-      return { action: 'changed', voteType, voteScore };
+
+      await hooks?.afterChange?.({
+        action: resultAction,
+        voteType,
+        previousVoteType: existingVote?.voteType ?? null,
+        actorType,
+      });
+
+      return { action: resultAction, voteType, voteScore };
+    };
+
+    if (actor.userId) {
+      return applyChange('user', { userId: actor.userId });
     }
 
-    await voteModel.create({
-      data: {
-        queueItemId,
-        guestId: actor.guestId!,
-        voteType,
-      },
-    });
-
-    await this.updateVoteScore(queueItemId);
-    const voteScore = await this.getVoteScore(queueItemId);
-    return { action: 'added', voteType, voteScore };
+    return applyChange('guest', { guestId: actor.guestId! });
   }
 
   private async updateVoteScore(queueItemId: string) {
@@ -412,6 +426,7 @@ export class QueueService {
       where: { id: queueItemId },
       include: {
         session: true,
+        addedByGuest: true,
       },
     });
   }

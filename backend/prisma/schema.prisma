@@ -97,6 +97,7 @@ model Guest {
   id         String     @id @default(uuid())
   sessionId  String
   name       String
+  clerkUserId String?
   createdAt  DateTime   @default(now())
 
   session    Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -104,4 +105,5 @@ model Guest {
   votes      Vote[]
 
   @@index([sessionId])
+  @@index([clerkUserId])
 }

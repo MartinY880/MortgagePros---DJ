@@ -193,7 +193,7 @@ export class SessionService {
     });
   }
 
-  async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string) {
+  async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string, clerkUserId?: string) {
     const guestModel = (prisma as any).guest;
     const sanitizedName = name.trim();
 
@@ -207,13 +207,23 @@ export class SessionService {
       });
 
       if (existingGuest && existingGuest.sessionId === sessionId) {
-        if (existingGuest.name === sanitizedName) {
+        const updates: Record<string, unknown> = {};
+
+        if (existingGuest.name !== sanitizedName) {
+          updates.name = sanitizedName;
+        }
+
+        if (!existingGuest.clerkUserId && clerkUserId) {
+          updates.clerkUserId = clerkUserId;
+        }
+
+        if (Object.keys(updates).length === 0) {
           return existingGuest;
         }
 
         return guestModel.update({
           where: { id: guestId },
-          data: { name: sanitizedName },
+          data: updates,
         });
       }
     }
@@ -222,6 +232,7 @@ export class SessionService {
       data: {
         sessionId,
         name: sanitizedName,
+        ...(clerkUserId ? { clerkUserId } : {}),
       },
     });
   }

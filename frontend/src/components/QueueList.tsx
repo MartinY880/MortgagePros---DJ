@@ -1,13 +1,13 @@
 import { ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
 import { queueApi } from '../services/api';
-import { QueueItem, SessionParticipant } from '../types';
+import { CreditState, QueueItem, SessionParticipant } from '../types';
 
 interface QueueListProps {
   nextUp?: QueueItem | null;
   queue: QueueItem[];
   sessionId: string;
   sessionHostId: string;
-  onQueueUpdate: () => void;
+  onQueueUpdate: (result?: { credits?: CreditState }) => void | Promise<void>;
   participant: SessionParticipant | null;
   onRequireAccess: () => void;
 }
@@ -36,11 +36,17 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
     }
 
     try {
-      await queueApi.vote(queueItemId, voteType);
-      void onQueueUpdate();
+      const response = await queueApi.vote(queueItemId, voteType);
+      const credits = response?.data?.credits as CreditState | undefined;
+      void onQueueUpdate(credits ? { credits } : undefined);
     } catch (error) {
       console.error('Vote error:', error);
       const status = (error as any)?.response?.status;
+      const message = (error as any)?.response?.data?.error;
+      if (status === 403 && typeof message === 'string' && message.toLowerCase().includes('credit')) {
+        alert(message);
+        return;
+      }
       if (status === 401 || status === 403) {
         onRequireAccess();
       }
@@ -55,8 +61,9 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
     if (!confirm('Remove this track from the queue?')) return;
     
     try {
-      await queueApi.remove(queueItemId);
-      void onQueueUpdate();
+  const response = await queueApi.remove(queueItemId);
+  const credits = response?.data?.credits as CreditState | undefined;
+  void onQueueUpdate(credits ? { credits } : undefined);
     } catch (error) {
       console.error('Remove error:', error);
       const status = (error as any)?.response?.status;
@@ -108,10 +115,10 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
         const downvoted = currentVote?.voteType === -1;
 
         return (
-        <div
-          key={item.id}
-          className="bg-spotify-gray p-4 rounded-lg flex items-center gap-4 hover:bg-opacity-80 transition"
-        >
+          <div
+            key={item.id}
+            className="bg-spotify-gray p-4 rounded-lg flex items-center gap-4 hover:bg-opacity-80 transition"
+          >
           {/* Track Number */}
           <div className="text-gray-400 font-bold w-8 text-center">
             {index + 1}
@@ -181,7 +188,7 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
               <Trash2 size={20} />
             </button>
           )}
-        </div>
+          </div>
         );
       })}
     </div>

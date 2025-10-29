@@ -75,6 +75,13 @@ export const sessionApi = {
   getRecent: () => api.get('/sessions/recent'),
   reopen: (id: string) => api.post(`/sessions/${id}/reopen`),
   delete: (id: string) => api.delete(`/sessions/${id}`),
+  adjustGuestCredits: (id: string, payload: {
+    clerkUserId: string;
+    amount?: number;
+    increaseTotal?: boolean;
+    newTotal?: number;
+    refill?: boolean;
+  }) => api.post(`/sessions/${id}/guest-credits`, payload),
 };
 
 export const queueApi = {

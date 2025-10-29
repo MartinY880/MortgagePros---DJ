@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
 import { guestApi } from '../services/api';
 import { socketService } from '../services/socket';
-import { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester } from '../types';
+import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, CreditState } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
@@ -11,6 +11,8 @@ import NextUp from '../components/NextUp';
 import Leaderboard from '../components/Leaderboard';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
+
+const GUEST_TRACK_COST = 10;
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -22,6 +24,7 @@ export default function SessionPage() {
   const [autoJoinStatus, setAutoJoinStatus] = useState<'idle' | 'pending' | 'error'>('idle');
   const [autoJoinMessage, setAutoJoinMessage] = useState<string | null>(null);
   const [signInPrompted, setSignInPrompted] = useState(false);
+  const [guestCredits, setGuestCredits] = useState<CreditState | null>(null);
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { openSignIn } = useClerk();
 
@@ -64,6 +67,14 @@ export default function SessionPage() {
     { revalidateOnFocus: false }
   );
   const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
+
+  useEffect(() => {
+    if (participant?.type === 'guest') {
+      setGuestCredits(participant.credits ?? null);
+    } else {
+      setGuestCredits(null);
+    }
+  }, [participant]);
 
   const executeJoin = useCallback(async () => {
     if (!sessionId) {
@@ -294,6 +305,47 @@ export default function SessionPage() {
     await mutatePlayback();
   };
 
+  const syncQueueAndCredits = (result?: { credits?: CreditState }) => {
+    if (result?.credits) {
+      setGuestCredits(result.credits);
+    }
+    void refreshQueue();
+    void mutateParticipant();
+  };
+
+  const handleTrackAdded = (result?: { credits?: CreditState }) => {
+    syncQueueAndCredits(result);
+  };
+
+  const handleQueueUpdate = (result?: { credits?: CreditState }) => {
+    syncQueueAndCredits(result);
+  };
+
+  const formatRefreshDate = (dateStr: string | undefined) => {
+    if (!dateStr) {
+      return 'Credits refresh daily';
+    }
+
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) {
+      return 'Credits refresh daily';
+    }
+
+    const [year, month, day] = parts.map(Number);
+    if (!year || !month || !day) {
+      return 'Credits refresh daily';
+    }
+
+    const localDate = new Date(year, month - 1, day);
+    return `Credits refreshed ${localDate.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })}`;
+  };
+
+  const hasInsufficientCredits = guestCredits !== null && guestCredits.currentCredits < GUEST_TRACK_COST;
+
   const updatePlayback = (updater: (current: PlaybackState | null) => PlaybackState | null) => {
     void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null } | undefined) => {
       const current = previous?.playback ?? null;
@@ -377,10 +429,28 @@ export default function SessionPage() {
               updatePlayback={updatePlayback}
             />
             <NextUp track={queueState.nextUp} />
+            {participant?.type === 'guest' && (
+              <div className="bg-spotify-gray p-4 rounded-lg flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-white font-semibold">Your Credits</p>
+                  <p className="text-gray-400 text-xs">Each track costs {GUEST_TRACK_COST} credits · Each vote costs 5 credits</p>
+                </div>
+                <div className="text-right">
+                  <p className={`${hasInsufficientCredits ? 'text-red-400' : 'text-spotify-green'} text-2xl font-bold`}>
+                    {guestCredits ? guestCredits.currentCredits : '—'}
+                    <span className="text-gray-400 text-base"> / {guestCredits ? guestCredits.totalCredits : '—'}</span>
+                  </p>
+                  <p className="text-gray-500 text-xs">{formatRefreshDate(guestCredits?.refreshDate)}</p>
+                  {hasInsufficientCredits && (
+                    <p className="text-red-400 text-xs mt-1">You&apos;re out of credits until the next refresh or a host tops you up.</p>
+                  )}
+                </div>
+              </div>
+            )}
             <SearchBar
               sessionId={session.id}
               allowExplicit={session.allowExplicit}
-              onTrackAdded={() => { void refreshQueue(); }}
+              onTrackAdded={handleTrackAdded}
               canSearch={participant?.type === 'host' || participant?.type === 'guest'}
               onRequireAccess={handleRequireAccess}
             />
@@ -389,7 +459,7 @@ export default function SessionPage() {
               queue={queueState.queue}
               sessionId={session.id}
               sessionHostId={session.host.id}
-              onQueueUpdate={() => { void refreshQueue(); }}
+              onQueueUpdate={handleQueueUpdate}
               participant={participant}
               onRequireAccess={handleRequireAccess}
             />

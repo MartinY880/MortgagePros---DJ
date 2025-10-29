@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { sessionService } from '../services/session.service';
 import { clerkClient } from '../lib/clerk';
+import { creditService, CreditError, CreditState } from '../services/credit.service';
 
 export class SessionController {
   private async resolveClerkFullName(userId: string) {
@@ -74,11 +75,22 @@ export class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
+      let credits: CreditState;
+      try {
+        credits = await creditService.ensureDailyCredits(clerkUserId);
+      } catch (error) {
+        if (error instanceof CreditError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
+      }
+
       const guestName = await this.resolveClerkFullName(clerkUserId);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
-        guestName
+        guestName,
+        clerkUserId
       );
 
       if (!req.session.guestSessions) {
@@ -90,7 +102,7 @@ export class SessionController {
         name: guest.name,
       };
 
-      res.json({ session, guest });
+    res.json({ session, guest, credits });
     } catch (error) {
       console.error('Join session by code error:', error);
       res.status(500).json({ error: 'Failed to join session' });
@@ -112,11 +124,22 @@ export class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
+      let credits: CreditState;
+      try {
+        credits = await creditService.ensureDailyCredits(clerkUserId);
+      } catch (error) {
+        if (error instanceof CreditError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
+      }
+
       const guestName = await this.resolveClerkFullName(clerkUserId);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
-        guestName
+        guestName,
+        clerkUserId
       );
 
       if (!req.session.guestSessions) {
@@ -128,7 +151,7 @@ export class SessionController {
         name: guest.name,
       };
 
-      res.json({ session, guest });
+    res.json({ session, guest, credits });
     } catch (error) {
       console.error('Join session by id error:', error);
       res.status(500).json({ error: 'Failed to join session' });
@@ -192,7 +215,19 @@ export class SessionController {
           if (clerkUserId) {
             const latestName = await this.resolveClerkFullName(clerkUserId);
             if (latestName && latestName !== guest.name) {
-              guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName);
+              guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName, clerkUserId);
+            }
+          }
+
+          let credits: CreditState | undefined;
+          if (clerkUserId) {
+            try {
+              credits = await creditService.ensureDailyCredits(clerkUserId);
+            } catch (error) {
+              if (error instanceof CreditError) {
+                return res.status(error.status).json({ error: error.message });
+              }
+              throw error;
             }
           }
 
@@ -208,6 +243,7 @@ export class SessionController {
               type: 'guest',
               name: guest.name,
               guestId: guest.id,
+              credits,
             },
           });
         }
@@ -274,6 +310,64 @@ export class SessionController {
         : message === 'Only the host can update session settings' ? 403
         : 500;
       res.status(status).json({ error: message });
+    }
+  };
+
+  grantGuestCredits = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const hostId = req.session.userId!;
+      const body = (req.body ?? {}) as {
+        clerkUserId?: string;
+        amount?: number;
+        increaseTotal?: boolean;
+        newTotal?: number;
+        refill?: boolean;
+      };
+
+      const { clerkUserId, amount, increaseTotal, newTotal, refill } = body;
+
+      if (!clerkUserId || typeof clerkUserId !== 'string') {
+        return res.status(400).json({ error: 'clerkUserId is required' });
+      }
+
+      const session = await sessionService.getSession(id);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      if (session.hostId !== hostId) {
+        return res.status(403).json({ error: 'Only the host can adjust guest credits' });
+      }
+
+      if (typeof newTotal === 'number') {
+        const normalizedTotal = Math.floor(newTotal);
+
+        if (!Number.isFinite(normalizedTotal) || normalizedTotal <= 0) {
+          return res.status(400).json({ error: 'newTotal must be a positive number' });
+        }
+
+        const credits = await creditService.setTotalCredits(clerkUserId, normalizedTotal, { refill });
+        return res.json({ credits });
+      }
+
+      if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ error: 'amount must be a positive number' });
+      }
+
+      const credits = await creditService.addCredits(clerkUserId, Math.floor(amount), {
+        increaseTotal: Boolean(increaseTotal),
+      });
+
+      res.json({ credits });
+    } catch (error: any) {
+      if (error instanceof CreditError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+
+      console.error('Grant guest credits error:', error);
+      res.status(500).json({ error: 'Failed to adjust credits' });
     }
   };
 }

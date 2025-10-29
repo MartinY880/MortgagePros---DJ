@@ -3,12 +3,12 @@ import { Search, Plus } from 'lucide-react';
 import useSWR, { Fetcher } from 'swr';
 import { AxiosError } from 'axios';
 import { spotifyApi, queueApi } from '../services/api';
-import { SpotifyTrack } from '../types';
+import type { CreditState, SpotifyTrack } from '../types';
 
 interface SearchBarProps {
   sessionId: string;
   allowExplicit: boolean;
-  onTrackAdded: () => void;
+  onTrackAdded: (result?: { credits?: CreditState }) => void;
   canSearch: boolean;
   onRequireAccess: () => void;
 }
@@ -83,8 +83,9 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     }
 
     try {
-      await queueApi.add(sessionId, trackId);
-      void onTrackAdded();
+  const response = await queueApi.add(sessionId, trackId);
+  const credits = response?.data?.credits as CreditState | undefined;
+  onTrackAdded(credits ? { credits } : undefined);
       setShowResults(false);
       setQuery('');
       setDebouncedQuery('');
