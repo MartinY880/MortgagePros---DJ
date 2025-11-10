@@ -3,8 +3,68 @@ import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
 import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
 import { queueService } from '../services/queue.service';
+import { playbackTargetService } from '../services/playbackTarget.service';
 
 export class SpotifyController {
+  async getPlaybackToken(req: Request, res: Response) {
+    try {
+      const userId = req.session.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(userId);
+      res.json({ accessToken });
+    } catch (error) {
+      console.error('Get playback token error:', error);
+      res.status(500).json({ error: 'Failed to get playback token' });
+    }
+  }
+
+  async getUserPlaylists(req: Request, res: Response) {
+    try {
+      const userId = req.session.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(userId);
+      const playlists = await spotifyService.getUserPlaylists(accessToken);
+      
+      res.json({ playlists });
+    } catch (error) {
+      console.error('Get playlists error:', error);
+      res.status(500).json({ error: 'Failed to get playlists' });
+    }
+  }
+
+  async startPlaylist(req: Request, res: Response) {
+    try {
+      const userId = req.session.userId!;
+      const { playlistUri } = req.body;
+
+      if (!playlistUri) {
+        return res.status(400).json({ error: 'playlistUri is required' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(userId);
+      const preference = await playbackTargetService.getPreference(userId);
+      
+      await spotifyService.startPlaylist(
+        playlistUri, 
+        accessToken, 
+        preference.playbackDeviceId || undefined
+      );
+
+      res.json({ message: 'Playlist started' });
+    } catch (error) {
+      console.error('Start playlist error:', error);
+      res.status(500).json({ error: 'Failed to start playlist' });
+    }
+  }
+
   async search(req: Request, res: Response) {
     try {
   const { q, sessionId } = req.query;
@@ -113,7 +173,16 @@ export class SpotifyController {
     try {
       const userId = req.session.userId!;
       const accessToken = await spotifyService.ensureValidToken(userId);
-      await spotifyService.play(accessToken);
+      const preference = await playbackTargetService.getPreference(userId);
+
+      const playbackStarted = await playbackTargetService.transferPlayback(userId, accessToken, true);
+      if (!playbackStarted && preference.playbackDeviceId) {
+        console.warn('Preferred playback device transfer failed during play request, falling back to direct play.');
+      }
+
+      if (!playbackStarted) {
+        await spotifyService.play(accessToken, preference.playbackDeviceId || undefined);
+      }
 
       res.json({ message: 'Playing' });
     } catch (error) {
@@ -126,7 +195,8 @@ export class SpotifyController {
     try {
       const userId = req.session.userId!;
       const accessToken = await spotifyService.ensureValidToken(userId);
-      await spotifyService.pause(accessToken);
+      const preference = await playbackTargetService.getPreference(userId);
+      await spotifyService.pause(accessToken, preference.playbackDeviceId || undefined);
 
       res.json({ message: 'Paused' });
     } catch (error) {
@@ -157,13 +227,60 @@ export class SpotifyController {
       playbackService.ensureMonitor(sessionId, session.hostId);
 
       const accessToken = await spotifyService.ensureValidToken(userId);
-      await spotifyService.skipToNext(accessToken);
-  playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
+      const preference = await playbackTargetService.getPreference(userId);
+      await playbackTargetService.transferPlayback(userId, accessToken, true);
+      await spotifyService.skipToNext(accessToken, preference.playbackDeviceId || undefined);
+      playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
 
       res.json({ message: 'Skipped to next' });
     } catch (error) {
       console.error('Next error:', error);
       res.status(500).json({ error: 'Failed to skip to next' });
+    }
+  }
+
+  async listDevices(req: Request, res: Response) {
+    try {
+      const userId = req.session.userId!;
+      const accessToken = await spotifyService.ensureValidToken(userId);
+      
+      // Check if librespot is blocking manual device selection
+      if (playbackTargetService.isLibrespotEnabled()) {
+        return res.status(200).json({
+          devices: [],
+          selectedDeviceId: null,
+          librespotEnabled: true,
+          librespotDeviceName: playbackTargetService.getLibrespotDeviceName(),
+        });
+      }
+      
+      const result = await playbackTargetService.listDevices(userId, accessToken);
+      res.json({ ...result, librespotEnabled: false });
+    } catch (error: any) {
+      console.error('List devices error:', error);
+      res.status(500).json({ error: error?.message || 'Failed to list devices' });
+    }
+  }
+
+  async selectDevice(req: Request, res: Response) {
+    try {
+      const userId = req.session.userId!;
+      const { deviceId } = req.body ?? {};
+      const accessToken = await spotifyService.ensureValidToken(userId);
+
+      let device = null;
+
+      try {
+        device = await playbackTargetService.selectDevice(userId, accessToken, deviceId ?? null);
+      } catch (error: any) {
+        console.error('Select device error:', error);
+        return res.status(400).json({ error: error?.message || 'Failed to select device' });
+      }
+
+      res.json({ device });
+    } catch (error) {
+      console.error('Select device error:', error);
+      res.status(500).json({ error: 'Failed to select device' });
     }
   }
 }

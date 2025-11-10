@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
-import { guestApi } from '../services/api';
+import { guestApi, spotifyApi } from '../services/api';
 import { socketService } from '../services/socket';
 import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, CreditState } from '../types';
 import QueueList from '../components/QueueList';
@@ -9,6 +9,9 @@ import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
 import Leaderboard from '../components/Leaderboard';
+import WebPlayer from '../components/WebPlayer';
+import OutputDeviceSelector from '../components/OutputDeviceSelector';
+import PlaylistSelector from '../components/PlaylistSelector';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
 
@@ -413,6 +416,53 @@ export default function SessionPage() {
         {autoJoinMessage && (
           <div className="mb-6 bg-red-900/40 border border-red-500/60 text-red-100 px-4 py-3 rounded-lg text-sm">
             {autoJoinMessage}
+          </div>
+        )}
+        {/* Web Player - only for hosts */}
+        {participant?.type === 'host' && (
+          <div className="mb-6 grid gap-4 md:grid-cols-2">
+            <WebPlayer 
+              sessionId={session.id}
+              onDeviceReady={async (deviceId) => {
+                console.log('Web player device ready, attempting to select:', deviceId);
+                // Auto-select the web player device with retry logic
+                let retries = 3;
+                while (retries > 0) {
+                  try {
+                    await spotifyApi.selectDevice(deviceId);
+                    console.log('✅ Web player device auto-selected successfully');
+                    break;
+                  } catch (error: any) {
+                    retries--;
+                    console.warn(`Failed to auto-select web player device (${3 - retries}/3):`, error?.response?.data || error?.message);
+                    if (retries > 0) {
+                      // Wait before retrying
+                      await new Promise(resolve => setTimeout(resolve, 2000));
+                    } else {
+                      console.error('❌ Failed to auto-select web player device after all retries');
+                      // Don't show error to user - they can manually select if needed
+                    }
+                  }
+                }
+              }}
+            />
+            <OutputDeviceSelector 
+              onDeviceSelected={(deviceId) => {
+                console.log('Output device selected:', deviceId);
+              }}
+            />
+          </div>
+        )}
+        {/* Playlist Selector - only for hosts */}
+        {participant?.type === 'host' && (
+          <div className="mb-6">
+            <PlaylistSelector 
+              onPlaylistStarted={() => {
+                console.log('Playlist started');
+                // Refresh playback state
+                void mutatePlayback();
+              }}
+            />
           </div>
         )}
         <div className="grid lg:grid-cols-3 gap-6">

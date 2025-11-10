@@ -52,6 +52,8 @@
 └────────────────────┘   └─────────────────────────────────────┘
 ```
 
+When `LIBRESPOT_ENABLED` is true, a librespot-based Spotify Connect receiver runs alongside the backend container. The backend keeps that device active, ensuring the jukebox can play audio without requiring the host's Spotify app to remain open.
+
 ## Data Flow
 
 ### 1. Authentication Flow
@@ -90,11 +92,13 @@ User → Vote (+1/-1) → Backend → Update Vote Score → Database
 
 ### 5. Playback Flow
 ```
-Host → Play/Pause/Skip → Backend → Spotify API → User's Device
-                                        ↓
-                                   WebSocket
-                                        ↓
-                              All Clients: Now Playing
+Host → Play/Pause/Skip → Backend → Spotify API →
+               ↳ Librespot Connect receiver (optional)
+               ↳ Active Spotify client (fallback)
+                        ↓
+                     WebSocket
+                        ↓
+                  All Clients: Now Playing
 ```
 
 ## API Endpoints

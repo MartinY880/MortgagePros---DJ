@@ -22,6 +22,23 @@ const rawFrontendOrigins = process.env.FRONTEND_ORIGINS;
 const normalizeOrigin = (origin: string) => origin.replace(/\/$/, '').toLowerCase();
 const normalizeUrl = (url: string) => url.replace(/\/+$/, '');
 
+const parseBoolean = (value: string | undefined, defaultValue: boolean) => {
+  if (typeof value === 'undefined' || value === '') {
+    return defaultValue;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (['1', 'true', 'yes', 'on', 'y'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off', 'n'].includes(normalized)) {
+    return false;
+  }
+
+  return defaultValue;
+};
 const originCandidates: Array<string | undefined> = [
   rawFrontendUrl,
   ...(rawFrontendOrigins ? rawFrontendOrigins.split(',') : []),
@@ -82,6 +99,12 @@ export const config = {
     clientId: process.env.SPOTIFY_CLIENT_ID!,
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET!,
     redirectUri: process.env.SPOTIFY_REDIRECT_URI!,
+  },
+  librespot: {
+    enabled: parseBoolean(process.env.LIBRESPOT_ENABLED, false),
+    deviceName: process.env.LIBRESPOT_DEVICE_NAME?.trim() || 'MortgagePros DJ',
+    transferOnQueue: parseBoolean(process.env.LIBRESPOT_TRANSFER_ON_QUEUE, true),
+    discoveryTimeoutMs: Number.parseInt(process.env.LIBRESPOT_DISCOVERY_TIMEOUT_MS || '15000', 10),
   },
   server: {
     port: parseInt(process.env.PORT || '5000'),

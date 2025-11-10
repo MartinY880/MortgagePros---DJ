@@ -13,6 +13,7 @@ A **complete, full-stack Spotify Jukebox application** with:
 - ✅ Queue management with voting system
 - ✅ Spotify Web API integration
 - ✅ Token refresh automation
+- ✅ Optional Librespot Spotify Connect receiver management (headless playback)
 
 ### Frontend (React + TypeScript + Vite)
 - ✅ Modern React 18 with TypeScript
@@ -299,6 +300,7 @@ MortgagePros - DJ/
 
 - **Spotify Premium Required** - Playback control needs Premium
 - **Active Device Needed** - Spotify must be open somewhere
+- **Librespot Receiver** - Enable `LIBRESPOT_ENABLED=true` to run the bundled Spotify Connect device with automatic pairing support
 - **Local Development** - Configured for localhost
 - **Token Management** - Automatic refresh every ~50 minutes
 - **Real-time Updates** - WebSocket keeps everyone in sync
@@ -350,6 +352,7 @@ MortgagePros - DJ/
 4. Use Prisma Studio to view database: `npx prisma studio`
 5. Make sure .env file has correct Spotify credentials
 6. Share session code with friends to test real-time features
+7. Enable Librespot if you want playback without leaving a Spotify client running
 
 ---
 

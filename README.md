@@ -10,7 +10,8 @@ A locally hosted collaborative Spotify jukebox application with queue management
 - 👍👎 Upvote/downvote tracks
 - 🔄 Real-time synchronization across clients
 - 🎮 Host playback controls
-- 🔐 Clerk-powered authentication for hosts and guests
+- � Optional headless playback via an embedded Librespot Spotify Connect receiver
+- �🔐 Clerk-powered authentication for hosts and guests
 
 ## Tech Stack
 
@@ -95,6 +96,24 @@ npm run dev
 
 Open your browser to `http://localhost:5173`
 
+## Optional: Managed Librespot Receiver
+
+This project can spin up an integrated [librespot](https://github.com/librespot-org/librespot) Spotify Connect receiver so the jukebox can play music without relying on a host device being open.
+
+1. **Enable the receiver** – set the following variables in `.env` (or Docker environment):
+   ```env
+   LIBRESPOT_ENABLED=true
+   LIBRESPOT_DEVICE_NAME=MortgagePros DJ
+   LIBRESPOT_TRANSFER_ON_QUEUE=true
+   ```
+   Optional extras include `LIBRESPOT_BACKEND`, `LIBRESPOT_BITRATE`, `LIBRESPOT_USERNAME`/`LIBRESPOT_PASSWORD`, and `LIBRESPOT_EXTRA_ARGS`.
+
+2. **First-time pairing** – if you do not provide credentials, librespot starts in discovery mode. Open the Spotify app on any device logged into the same account, look for the `MortgagePros DJ` device, and connect once. The generated credentials are cached in `./librespot-cache` so future boots re-use them.
+
+3. **Playback control** – once the receiver is active, the backend automatically transfers playback to the librespot device when songs are queued or when monitoring detects the wrong target device.
+
+For Docker deployments (including the provided `docker-compose.yml`), the librespot binary is baked into the image and enabled by setting the environment variables above. The cache directory is created inside the container at `/app/librespot-cache`; mount it as a volume if you want to persist credentials between rebuilds.
+
 ## Project Structure
 
 ```
@@ -177,9 +196,9 @@ Open your browser to `http://localhost:5173`
 ## Troubleshooting
 
 ### "No active device found"
-- Open Spotify app on your computer/phone
-- Start playing any song to activate the device
-- The jukebox will then control that device
+- If Librespot is enabled, ensure the `LIBRESPOT_DEVICE_NAME` appears in Spotify Connect and pair once from a mobile/desktop app.
+- Otherwise, open Spotify on your computer/phone, start playing any song, then return to the jukebox.
+- The jukebox will control the last active device for the authenticated Spotify account.
 
 ### Token expired errors
 - The app automatically refreshes tokens

@@ -1,5 +1,28 @@
 # Multi-stage Dockerfile for Spotify Jukebox App
 
+# Stage 0: Build Librespot binary
+FROM rustlang/rust:nightly-alpine3.19 AS librespot-builder
+
+ARG LIBRESPOT_REPO=https://github.com/librespot-org/librespot.git
+ARG LIBRESPOT_REF=master
+
+RUN apk add --no-cache \
+  git \
+  build-base \
+  clang \
+  openssl-dev \
+  openssl \
+  alsa-lib-dev \
+  alsa-lib \
+  pkgconfig
+
+WORKDIR /opt/librespot
+
+RUN git clone --depth 1 --branch ${LIBRESPOT_REF} ${LIBRESPOT_REPO} .
+ENV RUSTFLAGS="-C target-feature=-crt-static"
+
+RUN cargo +nightly build --release --locked --bin librespot
+
 # Stage 1: Build Backend
 FROM node:20-alpine AS backend-builder
 
@@ -54,8 +77,8 @@ RUN npm run build
 # Stage 3: Production Runtime
 FROM node:20-alpine AS runtime
 
-# Install dumb-init for proper signal handling and OpenSSL for Prisma
-RUN apk add --no-cache dumb-init openssl libssl3
+# Install dumb-init for proper signal handling, OpenSSL for Prisma, and audio deps for librespot
+RUN apk add --no-cache dumb-init openssl libssl3 alsa-lib
 
 # Install static file server globally to avoid runtime downloads
 RUN npm install --global serve
@@ -73,10 +96,14 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Ensure database directory exists even before volume mounts
 RUN mkdir -p /app/backend/data
+RUN mkdir -p /app/librespot-cache
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Copy librespot binary
+COPY --from=librespot-builder /opt/librespot/target/release/librespot /usr/local/bin/librespot
 
 # Create a non-root user
 RUN addgroup -g 1001 -S nodejs && \

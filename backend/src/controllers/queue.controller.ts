@@ -6,6 +6,7 @@ import { playbackService } from '../services/playback.service';
 import { broadcastQueueUpdate } from '../sockets/handlers';
 import { Server as SocketIOServer } from 'socket.io';
 import { creditService, CreditError, CreditState, GUEST_TRACK_COST, VOTE_REACTION_COST } from '../services/credit.service';
+import { playbackTargetService } from '../services/playbackTarget.service';
 
 export class QueueController {
   private resolveSessionActor = async (req: Request, sessionId: string) => {
@@ -131,11 +132,11 @@ export class QueueController {
 
       const state = await this.emitQueueState(req, sessionId);
 
-      // Push to Spotify queue only if this is the first upcoming track
+      // Push to playback device queue only if this is the first upcoming track
       if (queuedBefore === 0 && state.nextUp && state.nextUp.id === queueItem.id) {
         const trackUri = track.uri || `spotify:track:${track.id}`;
         try {
-          await spotifyService.addToQueue(trackUri, accessToken);
+          await playbackTargetService.queueTrack(session.hostId, accessToken, trackUri, { autoTransfer: true });
           playbackService.recordManualQueue(sessionId, queueItem.id);
         } catch (queueError) {
           console.warn('Failed to add track to Spotify playback queue:', queueError);

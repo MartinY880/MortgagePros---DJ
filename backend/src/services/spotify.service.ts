@@ -23,6 +23,8 @@ export class SpotifyService {
       'streaming',
       'user-read-email',
       'user-read-private',
+      'playlist-read-private',
+      'playlist-read-collaborative',
     ];
 
     return this.spotifyApi.createAuthorizeURL(scopes, 'state', true);
@@ -69,9 +71,10 @@ export class SpotifyService {
     return data.body;
   }
 
-  async addToQueue(trackUri: string, accessToken: string) {
+  async addToQueue(trackUri: string, accessToken: string, deviceId?: string | null) {
     this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.addToQueue(trackUri);
+    const options = deviceId ? { device_id: deviceId } : undefined;
+    await this.spotifyApi.addToQueue(trackUri, options);
   }
 
   async getCurrentPlayback(accessToken: string) {
@@ -80,19 +83,75 @@ export class SpotifyService {
     return data.body;
   }
 
-  async play(accessToken: string) {
+  async getAvailableDevices(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.play();
+    const data = await this.spotifyApi.getMyDevices();
+    return data.body.devices || [];
   }
 
-  async pause(accessToken: string) {
+  async transferPlayback(deviceId: string, accessToken: string, play = false) {
     this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.pause();
+    await this.spotifyApi.transferMyPlayback({
+      deviceIds: [deviceId],
+      play,
+    });
   }
 
-  async skipToNext(accessToken: string) {
+  async playUris(deviceId: string, uris: string[], accessToken: string, options?: { positionMs?: number }) {
     this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.skipToNext();
+    await this.spotifyApi.play({
+      device_id: deviceId,
+      uris,
+      ...(options?.positionMs ? { position_ms: options.positionMs } : {}),
+    });
+  }
+
+  async play(accessToken: string, deviceId?: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    if (deviceId) {
+      await this.spotifyApi.play({ device_id: deviceId });
+    } else {
+      await this.spotifyApi.play();
+    }
+  }
+
+  async pause(accessToken: string, deviceId?: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    if (deviceId) {
+      await this.spotifyApi.pause({ device_id: deviceId });
+    } else {
+      await this.spotifyApi.pause();
+    }
+  }
+
+  async skipToNext(accessToken: string, deviceId?: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    if (deviceId) {
+      await this.spotifyApi.skipToNext({ device_id: deviceId });
+    } else {
+      await this.spotifyApi.skipToNext();
+    }
+  }
+
+  async getUserPlaylists(accessToken: string, limit = 50) {
+    this.spotifyApi.setAccessToken(accessToken);
+    const data = await this.spotifyApi.getUserPlaylists({ limit });
+    return data.body.items || [];
+  }
+
+  async getPlaylistTracks(playlistId: string, accessToken: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    const data = await this.spotifyApi.getPlaylistTracks(playlistId);
+    return data.body.items || [];
+  }
+
+  async startPlaylist(playlistUri: string, accessToken: string, deviceId?: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    const options: any = { context_uri: playlistUri };
+    if (deviceId) {
+      options.device_id = deviceId;
+    }
+    await this.spotifyApi.play(options);
   }
 
   async ensureValidToken(userId: string): Promise<string> {

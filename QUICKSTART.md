@@ -129,6 +129,13 @@ NODE_ENV=development
 SESSION_SECRET=<any random string>
 FRONTEND_URL=http://localhost:5173
 DATABASE_URL="file:./dev.db"
+# Optional Librespot receiver settings
+# LIBRESPOT_ENABLED=true
+# LIBRESPOT_DEVICE_NAME=MortgagePros DJ
+# LIBRESPOT_TRANSFER_ON_QUEUE=true
+# LIBRESPOT_DISCOVERY_TIMEOUT_MS=15000
+# LIBRESPOT_BACKEND=rodio
+# LIBRESPOT_BITRATE=160
 ```
 
 ## Git Commands (if you want to version control)
@@ -155,6 +162,7 @@ git commit -m "Initial commit - Spotify Jukebox"
 4. **Use Prisma Studio** to view/edit database: `npx prisma studio`
 5. **Premium required** - Spotify Premium is needed for playback control
 6. **Active device** - Start playing a song in Spotify to activate device
+7. **Headless playback** - Enable `LIBRESPOT_ENABLED=true` to run the bundled Librespot Spotify Connect receiver and avoid keeping a Spotify app open.
 
 ## Next Steps
 

@@ -105,6 +105,22 @@ You should see: `Local: http://localhost:5173`
 
 ---
 
+## (Optional) Step 5.5: Enable the Librespot Receiver
+
+The backend can host its own Spotify Connect receiver using [librespot](https://github.com/librespot-org/librespot), allowing playback without leaving Spotify open on your laptop/phone.
+
+1. Edit `.env` and set:
+   ```env
+   LIBRESPOT_ENABLED=true
+   LIBRESPOT_DEVICE_NAME=MortgagePros DJ
+   ```
+2. Restart the backend. On first boot, open Spotify on a device logged into the same account, find the `MortgagePros DJ` device, and connect once to pair. Credentials are cached in `./librespot-cache`.
+3. Optional tunables include `LIBRESPOT_BACKEND`, `LIBRESPOT_BITRATE`, `LIBRESPOT_USERNAME`, `LIBRESPOT_PASSWORD`, and `LIBRESPOT_EXTRA_ARGS`.
+
+When enabled, the backend automatically keeps playback pointed at the Librespot device.
+
+---
+
 ## Step 6: Test the App
 
 1. Open your browser to **http://localhost:5173**
@@ -136,9 +152,8 @@ You should see: `Local: http://localhost:5173`
 ## Troubleshooting
 
 ### "No active device found"
-- Open the Spotify app on your computer or phone
-- Play any song to activate the device
-- The jukebox will now be able to control it
+- If Librespot is enabled, ensure the configured device appears in Spotify Connect and pair once.
+- Otherwise open the Spotify app on your computer or phone, play any song to activate the device, then return to the jukebox.
 
 ### "Cannot find module" errors
 - Make sure you ran `npm install` in both `backend` and `frontend` folders

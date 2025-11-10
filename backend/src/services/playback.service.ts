@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { queueService } from './queue.service';
 import { spotifyService } from './spotify.service';
 import { broadcastQueueUpdate, broadcastPlaybackUpdate } from '../sockets/handlers';
+import { playbackTargetService } from './playbackTarget.service';
 
 interface MonitorState {
   hostId: string;
@@ -9,6 +10,7 @@ interface MonitorState {
   processing: boolean;
   lastQueuedItemId: string | null;
   pauseUntil: number | null;
+  lastDeviceSyncAttempt: number;
 }
 
 const MIN_POLL_DELAY_MS = 3000;
@@ -72,6 +74,7 @@ class PlaybackService {
       processing: false,
       lastQueuedItemId: null,
       pauseUntil: null,
+      lastDeviceSyncAttempt: 0,
     });
 
     this.schedulePoll(sessionId, 0);
@@ -163,6 +166,13 @@ class PlaybackService {
       const accessToken = await spotifyService.ensureValidToken(monitor.hostId);
       const playback = await spotifyService.getCurrentPlayback(accessToken);
 
+      monitor.lastDeviceSyncAttempt = await playbackTargetService.reconcilePlaybackDevice(
+        monitor.hostId,
+        accessToken,
+        playback?.device ?? null,
+        monitor.lastDeviceSyncAttempt
+      );
+
       let queueState = await queueService.getQueueWithNext(sessionId);
       let nextDelay = DEFAULT_IDLE_POLL_MS;
       const requester = await this.resolveRequester(sessionId, playback?.item?.id);
@@ -194,7 +204,7 @@ class PlaybackService {
       if (queueState.nextUp && queueState.nextUp.id !== monitor.lastQueuedItemId) {
         const trackUri = `spotify:track:${queueState.nextUp.spotifyTrackId}`;
         try {
-          await spotifyService.addToQueue(trackUri, accessToken);
+          await playbackTargetService.queueTrack(monitor.hostId, accessToken, trackUri, { autoTransfer: false });
           monitor.lastQueuedItemId = queueState.nextUp.id;
         } catch (queueError) {
           console.warn('Failed to enqueue next track:', queueError);

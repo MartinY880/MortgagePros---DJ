@@ -12,6 +12,7 @@ pnpm-lock.yaml
 # Build output
 dist/
 build/
+librespot-cache/
 
 # Database
 *.db

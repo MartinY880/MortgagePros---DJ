@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   spotify-jukebox:
-    image: ghostreaper69/mtgprosdj:v0.0.11
+    image: ghostreaper69/mtgprosdj:v0.2.5
     container_name: dj
     restart: unless-stopped
     
@@ -55,11 +55,25 @@ services:
       FRONTEND_SOCKET_URL: "${FRONTEND_SOCKET_URL:-https://api-dj.pros.mortgage}"
 
       # Database (override via .env if needed)
-      DATABASE_URL: "${DATABASE_URL:-file:/app/backend/data/prod.db}"
+    DATABASE_URL: "${DATABASE_URL:-file:/app/backend/data/prod.db}"
+
+    # Librespot managed Spotify Connect receiver
+    LIBRESPOT_ENABLED: "${LIBRESPOT_ENABLED:-false}"
+    LIBRESPOT_DEVICE_NAME: "${LIBRESPOT_DEVICE_NAME:-MortgagePros DJ}"
+    LIBRESPOT_TRANSFER_ON_QUEUE: "${LIBRESPOT_TRANSFER_ON_QUEUE:-true}"
+    LIBRESPOT_DISCOVERY_TIMEOUT_MS: "${LIBRESPOT_DISCOVERY_TIMEOUT_MS:-15000}"
+    LIBRESPOT_BACKEND: "${LIBRESPOT_BACKEND:-rodio}"
+    LIBRESPOT_BITRATE: "${LIBRESPOT_BITRATE:-160}"
+    LIBRESPOT_USERNAME: "${LIBRESPOT_USERNAME:-}"
+    LIBRESPOT_PASSWORD: "${LIBRESPOT_PASSWORD:-}"
+    LIBRESPOT_DISABLE_DISCOVERY: "${LIBRESPOT_DISABLE_DISCOVERY:-}"
+    LIBRESPOT_EXTRA_ARGS: "${LIBRESPOT_EXTRA_ARGS:-}"
     
     volumes:
       # Persist database to local directory
       - ./data:/app/backend/data
+      # Persist librespot cache (stores auth blob when discovery pairing is used)
+      - ./librespot-cache:/app/librespot-cache
       # Optional: Mount custom .env file
       # - ./.env:/app/.env:ro
     

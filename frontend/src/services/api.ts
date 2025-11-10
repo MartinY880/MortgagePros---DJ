@@ -100,6 +100,10 @@ export const spotifyApi = {
   play: () => api.post('/spotify/play'),
   pause: () => api.post('/spotify/pause'),
   next: (sessionId: string) => api.post('/spotify/next', { sessionId }),
+  listDevices: () => api.get('/spotify/devices'),
+  selectDevice: (deviceId: string | null) => api.post('/spotify/devices/select', { deviceId }),
+  getPlaylists: () => api.get('/spotify/playlists'),
+  startPlaylist: (playlistUri: string) => api.post('/spotify/playlist/start', { playlistUri }),
 };
 
 export const guestApi = {

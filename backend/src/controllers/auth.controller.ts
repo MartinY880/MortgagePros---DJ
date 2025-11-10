@@ -56,8 +56,11 @@ export class AuthController {
       // Store user ID in session
       req.session.userId = user.id;
 
-      // Redirect to frontend
-      res.redirect(`${config.server.frontendUrl}/dashboard`);
+  const needsDeviceSelection = !config.librespot.enabled && !(user as any).playbackDeviceId;
+  const redirectPath = needsDeviceSelection ? '/device-setup' : '/dashboard';
+
+  // Redirect to frontend
+  res.redirect(`${config.server.frontendUrl}${redirectPath}`);
     } catch (error) {
       console.error('Callback error:', error);
       res.redirect(`${config.server.frontendUrl}?error=auth_failed`);
@@ -70,7 +73,7 @@ export class AuthController {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
-      const user = await prisma.user.findUnique({
+      const user = await (prisma as any).user.findUnique({
         where: { id: req.session.userId },
         select: {
           id: true,
@@ -78,6 +81,9 @@ export class AuthController {
           displayName: true,
           email: true,
           createdAt: true,
+          playbackDeviceId: true,
+          playbackDeviceName: true,
+          playbackDeviceType: true,
         },
       });
 
