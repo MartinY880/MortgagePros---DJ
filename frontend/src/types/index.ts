@@ -110,6 +110,13 @@ export interface SpotifyDeviceInfo {
   volume_percent?: number | null;
 }
 
+export interface ManagedPlaybackInfo {
+  enabled: boolean;
+  strategy: 'manual' | 'librespot' | 'static';
+  deviceId?: string | null;
+  deviceName?: string | null;
+}
+
 export interface LeaderboardEntry {
   id: string;
   fullName: string;

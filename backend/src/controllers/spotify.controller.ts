@@ -243,19 +243,8 @@ export class SpotifyController {
     try {
       const userId = req.session.userId!;
       const accessToken = await spotifyService.ensureValidToken(userId);
-      
-      // Check if librespot is blocking manual device selection
-      if (playbackTargetService.isLibrespotEnabled()) {
-        return res.status(200).json({
-          devices: [],
-          selectedDeviceId: null,
-          librespotEnabled: true,
-          librespotDeviceName: playbackTargetService.getLibrespotDeviceName(),
-        });
-      }
-      
       const result = await playbackTargetService.listDevices(userId, accessToken);
-      res.json({ ...result, librespotEnabled: false });
+      res.json(result);
     } catch (error: any) {
       console.error('List devices error:', error);
       res.status(500).json({ error: error?.message || 'Failed to list devices' });

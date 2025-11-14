@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { spotifyApi } from '../services/api';
-import type { SpotifyDeviceInfo } from '../types';
+import type { SpotifyDeviceInfo, ManagedPlaybackInfo } from '../types';
 
 interface OutputDeviceSelectorProps {
   onDeviceSelected?: (deviceId: string | null) => void;
@@ -12,12 +12,15 @@ export default function OutputDeviceSelector({ onDeviceSelected }: OutputDeviceS
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
+  const [managedPlayback, setManagedPlayback] = useState<ManagedPlaybackInfo | null>(null);
 
   const loadDevices = async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await spotifyApi.listDevices();
+      const fallback: ManagedPlaybackInfo = { enabled: false, strategy: 'manual' };
+      setManagedPlayback(response.data.managedPlayback ?? fallback);
       setDevices(response.data.devices || []);
       setSelectedDeviceId(response.data.selectedDeviceId || null);
     } catch (err: any) {
@@ -32,6 +35,10 @@ export default function OutputDeviceSelector({ onDeviceSelected }: OutputDeviceS
   }, []);
 
   const handleSelectDevice = async (deviceId: string) => {
+    if (managedPlayback?.enabled) {
+      return;
+    }
+
     if (selecting) return;
     
     setSelecting(true);
@@ -58,6 +65,29 @@ export default function OutputDeviceSelector({ onDeviceSelected }: OutputDeviceS
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-spotify-green"></div>
           <span className="text-gray-300 text-sm">Loading available devices...</span>
         </div>
+      </div>
+    );
+  }
+
+  if (managedPlayback?.enabled) {
+    const deviceName = managedPlayback.deviceName || 'the managed Spotify Connect device';
+    return (
+      <div className="bg-spotify-gray rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-white font-semibold">Managed Playback Enabled</h3>
+          <button
+            onClick={() => void loadDevices()}
+            className="text-xs text-spotify-green hover:text-spotify-hover"
+            disabled={loading}
+          >
+            Refresh
+          </button>
+        </div>
+        <p className="text-gray-300 text-sm">
+          Playback is handled by the server through{' '}
+          <span className="text-white font-semibold">{deviceName}</span>.
+          No manual device selection is required.
+        </p>
       </div>
     );
   }
@@ -124,7 +154,7 @@ export default function OutputDeviceSelector({ onDeviceSelected }: OutputDeviceS
       )}
 
       <p className="text-gray-500 text-xs mt-3">
-        The web player will control playback, but audio plays through your selected device.
+        The browser player only provides playback controls—audio comes from the device you pick here.
       </p>
     </div>
   );

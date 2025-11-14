@@ -17,6 +17,12 @@ export type QueueOptions = {
 };
 
 const DEVICE_RESYNC_INTERVAL_MS = 15000;
+const MANAGED_DEVICE_RESYNC_INTERVAL_MS = Math.max(5000, config.playback.managedDeviceResyncIntervalMs);
+
+type ManagedDeviceCacheEntry = {
+  deviceId: string | null;
+  lastChecked: number;
+};
 
 class PlaybackTargetService {
   private usesLibrespot() {
@@ -31,7 +37,29 @@ class PlaybackTargetService {
     return config.librespot.deviceName;
   }
 
+  private usesManagedDevice() {
+    return Boolean(config.playback.managedDeviceId);
+  }
+
+  isManagedPlaybackEnabled() {
+    return this.usesLibrespot() || this.usesManagedDevice();
+  }
+
+  getManagedDeviceName() {
+    return config.playback.managedDeviceName || 'Managed Spotify Device';
+  }
+
+  private managedDeviceCache = new Map<string, ManagedDeviceCacheEntry>();
+
   async getPreference(userId: string): Promise<PlaybackDevicePreference> {
+    if (this.usesManagedDevice()) {
+      return {
+        playbackDeviceId: config.playback.managedDeviceId,
+        playbackDeviceName: this.getManagedDeviceName(),
+        playbackDeviceType: 'Managed',
+      };
+    }
+
     const user = await userModel.findUnique({
       where: { id: userId },
       select: {
@@ -53,6 +81,10 @@ class PlaybackTargetService {
   }
 
   private async clearPreference(userId: string) {
+    if (this.usesManagedDevice()) {
+      return;
+    }
+
     await userModel.update({
       where: { id: userId },
       data: {
@@ -71,6 +103,26 @@ class PlaybackTargetService {
         selectedDeviceId: null,
         librespotEnabled: true,
         librespotDeviceName: config.librespot.deviceName,
+        managedPlayback: {
+          enabled: true,
+          strategy: 'librespot' as const,
+          deviceName: config.librespot.deviceName,
+        },
+      };
+    }
+
+    if (this.usesManagedDevice()) {
+      const resolvedId = await this.resolveManagedDeviceId(userId, accessToken).catch(() => null);
+      return {
+        devices: [],
+        selectedDeviceId: resolvedId ?? config.playback.managedDeviceId,
+        librespotEnabled: false,
+        managedPlayback: {
+          enabled: true,
+          strategy: 'static' as const,
+          deviceId: resolvedId ?? config.playback.managedDeviceId,
+          deviceName: this.getManagedDeviceName(),
+        },
       };
     }
 
@@ -96,12 +148,20 @@ class PlaybackTargetService {
       devices,
       selectedDeviceId: preference.playbackDeviceId,
       librespotEnabled: false,
+      managedPlayback: {
+        enabled: false,
+        strategy: 'manual' as const,
+      },
     };
   }
 
   async selectDevice(userId: string, accessToken: string, deviceId: string | null) {
     if (this.usesLibrespot()) {
       throw new Error('Managed librespot receiver is enabled. Disable it before selecting a manual device.');
+    }
+
+    if (this.usesManagedDevice()) {
+      throw new Error('Managed playback device is enforced by the server. Manual selection is disabled.');
     }
 
     if (!deviceId) {
@@ -159,6 +219,29 @@ class PlaybackTargetService {
       return;
     }
 
+    if (this.usesManagedDevice()) {
+      const managedDeviceId = await this.resolveManagedDeviceId(userId, accessToken).catch(() => null);
+
+      try {
+        await spotifyService.addToQueue(trackUri, accessToken, managedDeviceId ?? undefined);
+      } catch (error: any) {
+        const statusCode = error?.statusCode || error?.body?.error?.status;
+
+        if (managedDeviceId && (statusCode === 404 || statusCode === 403)) {
+          console.warn('Managed playback device unavailable while queueing; will refresh device cache.');
+          this.managedDeviceCache.delete(userId);
+        }
+
+        throw error;
+      }
+
+      if (options?.autoTransfer && managedDeviceId) {
+        await this.tryTransferToManagedDevice(userId, accessToken, managedDeviceId);
+      }
+
+      return;
+    }
+
     const preference = await this.getPreference(userId);
     const deviceId = preference.playbackDeviceId ?? undefined;
 
@@ -193,6 +276,17 @@ class PlaybackTargetService {
   async transferPlayback(userId: string, accessToken: string, play = false): Promise<boolean> {
     if (this.usesLibrespot()) {
       return librespotService.transferPlayback(userId, accessToken, play);
+    }
+
+    if (this.usesManagedDevice()) {
+      const managedDeviceId = await this.resolveManagedDeviceId(userId, accessToken).catch(() => null);
+
+      if (!managedDeviceId) {
+        console.warn('Managed playback device unavailable during transfer.');
+        return false;
+      }
+
+      return this.tryTransferToManagedDevice(userId, accessToken, managedDeviceId, play);
     }
 
     const preference = await this.getPreference(userId);
@@ -262,6 +356,47 @@ class PlaybackTargetService {
       return now;
     }
 
+    if (this.usesManagedDevice()) {
+      if (now - lastSyncAt < MANAGED_DEVICE_RESYNC_INTERVAL_MS) {
+        return lastSyncAt;
+      }
+
+      let managedDeviceId: string | null = null;
+
+      try {
+        managedDeviceId = await this.resolveManagedDeviceId(userId, accessToken, true);
+      } catch (error) {
+        console.warn('Failed to refresh managed playback device state:', error);
+        return now;
+      }
+
+      if (!managedDeviceId) {
+        console.warn('Managed playback device not found during reconciliation. Waiting for device to appear.');
+        return now;
+      }
+
+      if (playbackDevice?.id === managedDeviceId) {
+        return now;
+      }
+
+      try {
+        await spotifyService.transferPlayback(managedDeviceId, accessToken, false);
+      } catch (error: any) {
+        const statusCode = error?.statusCode || error?.body?.error?.status;
+
+        if (statusCode === 404 || statusCode === 403) {
+          console.warn('Managed playback device unavailable during reconciliation. Clearing cache and retrying later.');
+          this.managedDeviceCache.delete(userId);
+        } else if (statusCode === 400) {
+          console.warn('Managed playback reconciliation skipped (device not ready).');
+        } else {
+          console.warn('Failed to reconcile managed playback device:', error?.message || error);
+        }
+      }
+
+      return now;
+    }
+
     if (now - lastSyncAt < DEVICE_RESYNC_INTERVAL_MS) {
       return lastSyncAt;
     }
@@ -307,6 +442,75 @@ class PlaybackTargetService {
     }
 
     return now;
+  }
+
+  private async resolveManagedDeviceId(userId: string, accessToken: string, forceRefresh = false): Promise<string | null> {
+    if (!this.usesManagedDevice()) {
+      return null;
+    }
+
+    const now = Date.now();
+    const cached = this.managedDeviceCache.get(userId);
+
+    if (!forceRefresh && cached && now - cached.lastChecked < MANAGED_DEVICE_RESYNC_INTERVAL_MS) {
+      return cached.deviceId;
+    }
+
+    const configuredId = config.playback.managedDeviceId;
+    const configuredName = config.playback.managedDeviceName?.trim().toLowerCase();
+
+    try {
+      const devices = await spotifyService.getAvailableDevices(accessToken);
+
+      let match = devices.find((device: any) => configuredId && device?.id === configuredId);
+
+      if (!match && configuredName) {
+        match = devices.find((device: any) => typeof device?.name === 'string' && device.name.trim().toLowerCase() === configuredName);
+      }
+
+      const resolvedId = match?.id ?? null;
+
+      if (!resolvedId) {
+        console.warn(
+          `Managed playback device not found. Expected id "${configuredId}" or name "${config.playback.managedDeviceName ?? ''}".`
+        );
+      }
+
+      this.managedDeviceCache.set(userId, { deviceId: resolvedId, lastChecked: now });
+      return resolvedId;
+    } catch (error) {
+      console.error('Failed to query Spotify devices for managed playback device:', error);
+      this.managedDeviceCache.delete(userId);
+      throw error;
+    }
+  }
+
+  private async tryTransferToManagedDevice(
+    userId: string,
+    accessToken: string,
+    deviceId: string,
+    play = false
+  ): Promise<boolean> {
+    try {
+      await spotifyService.transferPlayback(deviceId, accessToken, play);
+      return true;
+    } catch (error: any) {
+      const statusCode = error?.statusCode || error?.body?.error?.status;
+
+      if (statusCode === 404 || statusCode === 403) {
+        console.warn('Managed playback device unavailable during transfer; clearing cache.');
+        this.managedDeviceCache.delete(userId);
+        return false;
+      }
+
+      if (statusCode === 400) {
+        console.warn('Managed playback device not ready for transfer; will retry later.');
+        return false;
+      }
+
+      console.warn('Unexpected error transferring to managed playback device:', error);
+      return false;
+    }
   }
 }
 

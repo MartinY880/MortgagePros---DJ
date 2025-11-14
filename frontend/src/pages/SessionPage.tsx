@@ -424,25 +424,52 @@ export default function SessionPage() {
             <WebPlayer 
               sessionId={session.id}
               onDeviceReady={async (deviceId) => {
-                console.log('Web player device ready, attempting to select:', deviceId);
-                // Auto-select the web player device with retry logic
-                let retries = 3;
-                while (retries > 0) {
-                  try {
-                    await spotifyApi.selectDevice(deviceId);
-                    console.log('✅ Web player device auto-selected successfully');
-                    break;
-                  } catch (error: any) {
-                    retries--;
-                    console.warn(`Failed to auto-select web player device (${3 - retries}/3):`, error?.response?.data || error?.message);
-                    if (retries > 0) {
-                      // Wait before retrying
-                      await new Promise(resolve => setTimeout(resolve, 2000));
-                    } else {
-                      console.error('❌ Failed to auto-select web player device after all retries');
-                      // Don't show error to user - they can manually select if needed
+                console.log('Web player device ready, evaluating auto-select:', deviceId);
+
+                try {
+                  const response = await spotifyApi.listDevices();
+                  const {
+                    selectedDeviceId,
+                    librespotEnabled,
+                  } = response.data ?? {};
+
+                  if (librespotEnabled) {
+                    console.log('Managed playback active; skipping web player auto-selection.');
+                    return;
+                  }
+
+                  if (selectedDeviceId && selectedDeviceId !== deviceId) {
+                    console.log('A manual playback device is already selected; leaving it unchanged.');
+                    return;
+                  }
+
+                  if (selectedDeviceId === deviceId) {
+                    console.log('Web player is already the active device.');
+                    return;
+                  }
+
+                  // Auto-select the web player device only as a fallback when nothing else is selected
+                  let retries = 3;
+                  while (retries > 0) {
+                    try {
+                      await spotifyApi.selectDevice(deviceId);
+                      console.log('✅ Web player device auto-selected successfully');
+                      break;
+                    } catch (error: any) {
+                      retries--;
+                      console.warn(
+                        `Failed to auto-select web player device (${3 - retries}/3):`,
+                        error?.response?.data || error?.message
+                      );
+                      if (retries > 0) {
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                      } else {
+                        console.error('❌ Failed to auto-select web player device after all retries');
+                      }
                     }
                   }
+                } catch (error) {
+                  console.warn('Unable to determine playback device preference; skipping auto-select.', error);
                 }
               }}
             />

@@ -94,6 +94,24 @@ if (!frontendClerkPublishableKey) {
   throw new Error('Missing frontend Clerk publishable key. Set FRONTEND_CLERK_PUBLISHABLE_KEY or CLERK_PUBLISHABLE_KEY.');
 }
 
+const librespotEnabled = parseBoolean(process.env.LIBRESPOT_ENABLED, false);
+const librespotDeviceName = process.env.LIBRESPOT_DEVICE_NAME?.trim() || 'MortgagePros DJ';
+const librespotTransferOnQueue = parseBoolean(process.env.LIBRESPOT_TRANSFER_ON_QUEUE, true);
+const librespotDiscoveryTimeoutMs = Number.parseInt(process.env.LIBRESPOT_DISCOVERY_TIMEOUT_MS || '15000', 10);
+
+const managedDeviceId = process.env.MANAGED_DEVICE_ID?.trim() || null;
+const managedDeviceName = process.env.MANAGED_DEVICE_NAME?.trim() || null;
+const managedDeviceResyncIntervalRaw = process.env.MANAGED_DEVICE_RESYNC_INTERVAL_MS || '30000';
+const managedDeviceResyncIntervalMs = Number.parseInt(managedDeviceResyncIntervalRaw, 10);
+
+if (Number.isNaN(managedDeviceResyncIntervalMs) || managedDeviceResyncIntervalMs <= 0) {
+  throw new Error('MANAGED_DEVICE_RESYNC_INTERVAL_MS must be a positive integer when provided.');
+}
+
+if (librespotEnabled && managedDeviceId) {
+  throw new Error('Cannot enable librespot and configure MANAGED_DEVICE_ID at the same time. Choose one playback strategy.');
+}
+
 export const config = {
   spotify: {
     clientId: process.env.SPOTIFY_CLIENT_ID!,
@@ -101,16 +119,21 @@ export const config = {
     redirectUri: process.env.SPOTIFY_REDIRECT_URI!,
   },
   librespot: {
-    enabled: parseBoolean(process.env.LIBRESPOT_ENABLED, false),
-    deviceName: process.env.LIBRESPOT_DEVICE_NAME?.trim() || 'MortgagePros DJ',
-    transferOnQueue: parseBoolean(process.env.LIBRESPOT_TRANSFER_ON_QUEUE, true),
-    discoveryTimeoutMs: Number.parseInt(process.env.LIBRESPOT_DISCOVERY_TIMEOUT_MS || '15000', 10),
+    enabled: librespotEnabled,
+    deviceName: librespotDeviceName,
+    transferOnQueue: librespotTransferOnQueue,
+    discoveryTimeoutMs: librespotDiscoveryTimeoutMs,
   },
   server: {
     port: parseInt(process.env.PORT || '5000'),
     nodeEnv: process.env.NODE_ENV || 'development',
     frontendUrl: primaryFrontendUrl,
     frontendOrigins: uniqueFrontendOrigins,
+  },
+  playback: {
+    managedDeviceId,
+    managedDeviceName,
+    managedDeviceResyncIntervalMs,
   },
   session: {
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
