@@ -546,7 +546,9 @@ export default function SessionPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <ScheduledPlaybackManager sessionId={session.id} canManage={isHost} />
+            {isHost && (
+              <ScheduledPlaybackManager sessionId={session.id} canManage />
+            )}
             <Leaderboard
               sessionId={session.id}
               title="Performance Leaderboard"

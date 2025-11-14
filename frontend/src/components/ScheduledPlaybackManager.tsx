@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { PlusCircle, Clock, XCircle, Loader2, Calendar } from 'lucide-react';
+import { ChangeEvent, useEffect, useState } from 'react';
+import { Search, Plus, Clock, XCircle, Loader2, Calendar } from 'lucide-react';
+import useSWR, { Fetcher } from 'swr';
+import { AxiosError } from 'axios';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { scheduledPlaybackApi, spotifyApi } from '../services/api';
 import type { ScheduledPlayback, SpotifyTrack } from '../types';
@@ -26,14 +28,13 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
 
   const [scheduledTime, setScheduledTime] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<SpotifyTrack[]>([]);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedTracks, setSelectedTracks] = useState<SpotifyTrack[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const upcoming = data?.upcoming ?? [];
-  const history = data?.history ?? [];
 
   const timezoneOffsetMinutes = new Date().getTimezoneOffset();
 
@@ -69,25 +70,56 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
     return `Last run ${when} (${normalizedStatus})`;
   };
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
+  useEffect(() => {
+    const trimmed = searchTerm.trim();
+
+    if (!canManage) {
+      setDebouncedSearchTerm('');
+      setShowSearchResults(false);
       return;
     }
 
-    setSearching(true);
-    setFormError(null);
-    try {
-      const response = await spotifyApi.search(sessionId, searchTerm.trim());
-      const tracks: SpotifyTrack[] = response.data?.tracks ?? response.data ?? [];
-      setSearchResults(tracks);
-    } catch (err) {
-      console.error('Failed to search tracks:', err);
-      setFormError('Failed to search tracks. Please try again.');
-    } finally {
-      setSearching(false);
+    if (!trimmed) {
+      setDebouncedSearchTerm('');
+      setShowSearchResults(false);
+      return;
     }
+
+    setShowSearchResults(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(trimmed);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, canManage]);
+
+  const searchFetcher: Fetcher<SpotifyTrack[], [string, string, string]> = async ([, id, term]) => {
+    const response = await spotifyApi.search(id, term);
+    const tracks: SpotifyTrack[] = response.data?.tracks ?? response.data ?? [];
+    return tracks;
   };
+
+  const {
+    data: searchResults,
+    error: searchError,
+    isValidating: searching,
+  } = useSWR<SpotifyTrack[], AxiosError>(
+    canManage && debouncedSearchTerm ? ['scheduled-playback-search', sessionId, debouncedSearchTerm] : null,
+    searchFetcher,
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    }
+  );
+
+  useEffect(() => {
+    if (!searchError) {
+      return;
+    }
+
+    console.error('Failed to search tracks:', searchError);
+    setFormError('Failed to search tracks. Please try again.');
+  }, [searchError]);
 
   const addTrack = (track: SpotifyTrack) => {
     if (selectedTracks.find((existing) => existing.id === track.id)) {
@@ -99,7 +131,11 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
       return;
     }
 
+    setFormError(null);
     setSelectedTracks((prev) => [...prev, track]);
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setShowSearchResults(false);
   };
 
   const removeTrack = (trackId: string) => {
@@ -140,7 +176,8 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
       });
 
       setSearchTerm('');
-      setSearchResults([]);
+      setDebouncedSearchTerm('');
+      setShowSearchResults(false);
       setSelectedTracks([]);
       setScheduledTime('');
       await mutate();
@@ -179,7 +216,7 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
     return `${first.trackName} • ${first.trackArtist} (+${rest.length} more)`;
   };
 
-  const formattedSearchResults = searchResults.filter((track) =>
+  const filteredSearchResults = (searchResults ?? []).filter((track) =>
     !selectedTracks.some((selected) => selected.id === track.id)
   );
 
@@ -220,48 +257,78 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
 
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-300">Add tracks</label>
-            <div className="flex gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value)}
                 placeholder="Search Spotify…"
-                className="flex-1 bg-spotify-black text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                className="w-full bg-spotify-black text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                onFocus={() => {
+                  if (searchTerm.trim()) {
+                    setShowSearchResults(true);
+                  }
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    void handleSearch();
+                  if (event.key === 'Escape') {
+                    setSearchTerm('');
+                    setDebouncedSearchTerm('');
+                    setShowSearchResults(false);
                   }
                 }}
               />
-              <button
-                type="button"
-                onClick={() => void handleSearch()}
-                className="bg-spotify-green hover:bg-spotify-hover text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-              >
-                {searching ? <Loader2 className="animate-spin" size={18} /> : <PlusCircle size={18} />}
-                <span>Search</span>
-              </button>
-            </div>
 
-            {formattedSearchResults.length > 0 && (
-              <div className="bg-spotify-black/40 rounded-lg divide-y divide-spotify-gray/40 border border-spotify-black/30">
-                {formattedSearchResults.slice(0, 5).map((track) => (
-                  <button
-                    key={track.id}
-                    type="button"
-                    onClick={() => addTrack(track)}
-                    className="w-full text-left px-4 py-3 hover:bg-spotify-gray/40 transition flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="text-white text-sm font-semibold">{track.name}</p>
-                      <p className="text-xs text-gray-400">{track.artists.map((artist) => artist.name).join(', ')}</p>
+              {showSearchResults && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray/95 backdrop-blur border border-spotify-black/40 rounded-lg shadow-xl max-h-96 overflow-y-auto z-30">
+                  {searching && (
+                    <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+                      <Loader2 className="animate-spin" size={16} />
+                      <span>Searching…</span>
                     </div>
-                    <PlusCircle className="text-spotify-green" size={18} />
+                  )}
+                  {!searching && filteredSearchResults.length === 0 ? (
+                    <div className="p-4 text-sm text-gray-400">No results found.</div>
+                  ) : (
+                    filteredSearchResults.map((track) => (
+                      <button
+                        key={track.id}
+                        type="button"
+                        onClick={() => addTrack(track)}
+                        className="w-full text-left px-4 py-3 hover:bg-spotify-black/60 transition flex items-center gap-3"
+                      >
+                        {track.album?.images?.[2]?.url && (
+                          <img
+                            src={track.album.images[2].url}
+                            alt={track.name}
+                            className="w-10 h-10 rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-semibold truncate">{track.name}</p>
+                          <p className="text-xs text-gray-400 truncate">
+                            {track.artists.map((artist) => artist.name).join(', ')}
+                          </p>
+                        </div>
+                        {track.explicit && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-spotify-green/20 text-spotify-green">
+                            Explicit
+                          </span>
+                        )}
+                        <Plus className="text-spotify-green shrink-0" size={18} />
+                      </button>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowSearchResults(false)}
+                    className="w-full px-4 py-2 text-sm text-gray-400 hover:text-white border-t border-spotify-black/30"
+                  >
+                    Close
                   </button>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
 
           {selectedTracks.length > 0 && (
@@ -349,35 +416,6 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
         )}
       </div>
 
-      {history.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="text-lg font-semibold text-white">Recent activity</h4>
-          <ul className="space-y-2">
-            {history.map((schedule) => (
-              <li
-                key={schedule.id}
-                className="bg-spotify-black/30 border border-spotify-black/20 rounded-lg px-4 py-3 flex flex-col gap-1"
-              >
-                <div className="flex justify-between items-center">
-                  <p className="text-white text-sm font-semibold">
-                    {new Date(schedule.scheduledFor).toLocaleString()}
-                  </p>
-                  <span className="text-xs text-gray-400">{schedule.status}</span>
-                </div>
-                <p className="text-xs text-gray-400">{renderTrackSummary(schedule)}</p>
-                {schedule.failureReason && (
-                  <p className="text-xs text-red-300">{schedule.failureReason}</p>
-                )}
-                {schedule.lastRunAt && (
-                  <p className="text-xs text-gray-500">
-                    Completed {new Date(schedule.lastRunAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
