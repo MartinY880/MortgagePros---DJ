@@ -29,6 +29,7 @@ model User {
   
   hostedSessions Session[] @relation("HostedSessions")
   lastActiveSession Session? @relation("LastActiveSession", fields: [lastActiveSessionId], references: [id])
+  scheduledPlaybacks ScheduledPlayback[] @relation("ScheduledPlaybackCreator")
   queueItems     QueueItem[]
   votes          Vote[]
 }
@@ -47,6 +48,7 @@ model Session {
   queueItems  QueueItem[]
   guests      Guest[]
   lastActiveUsers User[] @relation("LastActiveSession")
+  scheduledPlaybacks ScheduledPlayback[]
   
   @@index([code])
   @@index([hostId])
@@ -110,4 +112,55 @@ model Guest {
 
   @@index([sessionId])
   @@index([clerkUserId])
+}
+
+enum ScheduledPlaybackStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ScheduledPlayback {
+  id             String                  @id @default(uuid())
+  sessionId      String
+  createdById    String
+  scheduledFor   DateTime
+  isRecurringDaily Boolean              @default(false)
+  timeOfDayMinutes Int?
+  timezoneOffsetMinutes Int?
+  status         ScheduledPlaybackStatus @default(PENDING)
+  completedAt    DateTime?
+  failureReason  String?
+  lastRunAt      DateTime?
+  lastRunStatus  ScheduledPlaybackStatus?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  session        Session                 @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdBy      User                    @relation("ScheduledPlaybackCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  tracks         ScheduledPlaybackTrack[]
+
+  @@index([sessionId])
+  @@index([scheduledFor])
+  @@index([status])
+}
+
+model ScheduledPlaybackTrack {
+  id                  String             @id @default(uuid())
+  scheduledPlaybackId String
+  order               Int
+  spotifyTrackId      String
+  spotifyUri          String
+  trackName           String
+  trackArtist         String
+  trackAlbum          String?
+  trackImage          String?
+  trackDuration       Int
+  createdAt           DateTime           @default(now())
+
+  scheduledPlayback   ScheduledPlayback  @relation(fields: [scheduledPlaybackId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledPlaybackId, order])
 }

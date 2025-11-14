@@ -485,6 +485,14 @@ class PlaybackTargetService {
     }
   }
 
+  async getManagedDeviceId(
+    userId: string,
+    accessToken: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<string | null> {
+    return this.resolveManagedDeviceId(userId, accessToken, options?.forceRefresh ?? false);
+  }
+
   private async tryTransferToManagedDevice(
     userId: string,
     accessToken: string,

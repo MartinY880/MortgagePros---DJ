@@ -97,13 +97,21 @@ export class SpotifyService {
     });
   }
 
-  async playUris(deviceId: string, uris: string[], accessToken: string, options?: { positionMs?: number }) {
+  async playUris(accessToken: string, uris: string[], deviceId?: string | null, options?: { positionMs?: number }) {
     this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.play({
-      device_id: deviceId,
+    const payload: Record<string, unknown> = {
       uris,
-      ...(options?.positionMs ? { position_ms: options.positionMs } : {}),
-    });
+    };
+
+    if (deviceId) {
+      payload.device_id = deviceId;
+    }
+
+    if (typeof options?.positionMs === 'number') {
+      payload.position_ms = options.positionMs;
+    }
+
+    await this.spotifyApi.play(payload);
   }
 
   async play(accessToken: string, deviceId?: string) {
@@ -113,6 +121,39 @@ export class SpotifyService {
     } else {
       await this.spotifyApi.play();
     }
+  }
+
+  async playContext(
+    accessToken: string,
+    options: {
+      deviceId?: string | null;
+      contextUri: string;
+      offsetUri?: string;
+      offsetPosition?: number;
+      positionMs?: number;
+    }
+  ) {
+    this.spotifyApi.setAccessToken(accessToken);
+
+    const payload: Record<string, unknown> = {
+      context_uri: options.contextUri,
+    };
+
+    if (options.deviceId) {
+      payload.device_id = options.deviceId;
+    }
+
+    if (options.offsetUri) {
+      payload.offset = { uri: options.offsetUri };
+    } else if (typeof options.offsetPosition === 'number') {
+      payload.offset = { position: options.offsetPosition };
+    }
+
+    if (typeof options.positionMs === 'number') {
+      payload.position_ms = options.positionMs;
+    }
+
+    await this.spotifyApi.play(payload);
   }
 
   async pause(accessToken: string, deviceId?: string) {

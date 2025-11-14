@@ -125,3 +125,36 @@ export interface LeaderboardEntry {
   underwriting: number;
   totalPoints: number;
 }
+
+export type ScheduledPlaybackStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export interface ScheduledPlaybackTrack {
+  id: string;
+  scheduledPlaybackId: string;
+  order: number;
+  spotifyTrackId: string;
+  spotifyUri: string;
+  trackName: string;
+  trackArtist: string;
+  trackAlbum: string | null;
+  trackImage: string | null;
+  trackDuration: number;
+}
+
+export interface ScheduledPlayback {
+  id: string;
+  sessionId: string;
+  createdById: string;
+  scheduledFor: string;
+  isRecurringDaily: boolean;
+  timeOfDayMinutes?: number | null;
+  timezoneOffsetMinutes?: number | null;
+  status: ScheduledPlaybackStatus;
+  completedAt?: string | null;
+  failureReason?: string | null;
+  lastRunAt?: string | null;
+  lastRunStatus?: ScheduledPlaybackStatus | null;
+  createdAt: string;
+  updatedAt: string;
+  tracks: ScheduledPlaybackTrack[];
+}

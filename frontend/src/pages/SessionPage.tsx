@@ -12,6 +12,7 @@ import Leaderboard from '../components/Leaderboard';
 import WebPlayer from '../components/WebPlayer';
 import OutputDeviceSelector from '../components/OutputDeviceSelector';
 import PlaylistSelector from '../components/PlaylistSelector';
+import ScheduledPlaybackManager from '../components/ScheduledPlaybackManager';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
 
@@ -362,6 +363,7 @@ export default function SessionPage() {
   const upcomingCount = queueState.queue.length + (queueState.nextUp ? 1 : 0);
   const totalVotes = (queueState.nextUp?.voteScore ?? 0) +
     queueState.queue.reduce((sum, item) => sum + item.voteScore, 0);
+  const isHost = participant?.type === 'host';
 
   return (
     <div className="min-h-screen bg-spotify-dark">
@@ -481,7 +483,7 @@ export default function SessionPage() {
           </div>
         )}
         {/* Playlist Selector - only for hosts */}
-        {participant?.type === 'host' && (
+        {isHost && (
           <div className="mb-6">
             <PlaylistSelector 
               onPlaylistStarted={() => {
@@ -544,6 +546,7 @@ export default function SessionPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            <ScheduledPlaybackManager sessionId={session.id} canManage={isHost} />
             <Leaderboard
               sessionId={session.id}
               title="Performance Leaderboard"

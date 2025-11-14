@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config';
 import { setupSocketHandlers } from './sockets/handlers';
 import { playbackService } from './services/playback.service';
+import { scheduledPlaybackProcessor } from './services/scheduledPlaybackProcessor';
 import { clerkMiddleware } from './middleware/clerk.middleware';
 
 // Import routes
@@ -110,6 +111,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Setup Socket.IO handlers
 setupSocketHandlers(io);
 playbackService.setSocketServer(io);
+scheduledPlaybackProcessor.start();
 
 // Start server
 const PORT = config.server.port;
@@ -124,6 +126,7 @@ httpServer.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  scheduledPlaybackProcessor.stop();
   httpServer.close(() => {
     console.log('HTTP server closed');
     process.exit(0);

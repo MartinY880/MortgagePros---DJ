@@ -118,4 +118,26 @@ export const leaderboardApi = {
     api.get(sessionId ? `/sessions/${sessionId}/leaderboard` : '/stats/leaderboard'),
 };
 
+export const scheduledPlaybackApi = {
+  list: (sessionId: string) => api.get(`/sessions/${sessionId}/scheduled-playback`),
+  create: (
+    sessionId: string,
+    payload: {
+      timeOfDay: string;
+      timezoneOffsetMinutes: number;
+      tracks: Array<{
+        spotifyTrackId: string;
+        spotifyUri?: string;
+        trackName: string;
+        trackArtist: string;
+        trackAlbum?: string | null;
+        trackImage?: string | null;
+        trackDuration: number;
+      }>;
+    }
+  ) => api.post(`/sessions/${sessionId}/scheduled-playback`, payload),
+  cancel: (sessionId: string, scheduleId: string) =>
+    api.delete(`/sessions/${sessionId}/scheduled-playback/${scheduleId}`),
+};
+
 export default api;
