@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import useSWR, { Fetcher } from 'swr';
 import { AxiosError } from 'axios';
@@ -43,16 +43,27 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     return () => clearTimeout(timer);
   }, [query, canSearch, onRequireAccess]);
 
-  const searchFetcher: Fetcher<SpotifyTrack[], [string, string, string]> = async ([, id, term]) => {
+  type SearchResponse = {
+    tracks: SpotifyTrack[];
+    bannedTrackIds?: string[];
+    bannedArtistIds?: string[];
+  };
+
+  const searchFetcher: Fetcher<SearchResponse, [string, string, string]> = async ([, id, term]) => {
     const response = await spotifyApi.search(id, term);
-    return response.data.tracks || [];
+    const tracks: SpotifyTrack[] = response.data?.tracks ?? response.data ?? [];
+    return {
+      tracks,
+      bannedTrackIds: response.data?.bannedTrackIds ?? [],
+      bannedArtistIds: response.data?.bannedArtistIds ?? [],
+    };
   };
 
   const {
     data: searchData,
     error: searchError,
     isValidating,
-  } = useSWR<SpotifyTrack[], AxiosError>(
+  } = useSWR<SearchResponse, AxiosError>(
     canExecuteSearch ? ['spotify-search', sessionId, debouncedQuery] : null,
     searchFetcher,
     {
@@ -73,7 +84,9 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     }
   }, [searchError, onRequireAccess]);
 
-  const results = searchData ?? [];
+  const bannedTrackIds = useMemo(() => new Set(searchData?.bannedTrackIds ?? []), [searchData?.bannedTrackIds]);
+  const bannedArtistIds = useMemo(() => new Set(searchData?.bannedArtistIds ?? []), [searchData?.bannedArtistIds]);
+  const results = searchData?.tracks ?? [];
   const searching = isValidating;
 
   const handleAddTrack = async (trackId: string) => {
@@ -142,7 +155,17 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
             <div className="p-2">
               {results.map((track: SpotifyTrack) => {
                 const isExplicit = Boolean(track.explicit);
-                const disabled = isExplicit && !allowExplicit;
+                const isBanned = bannedTrackIds.has(track.id);
+                const isArtistBanned = track.artists.some((artist) => bannedArtistIds.has(artist.id));
+                const disabledReason = isBanned
+                  ? 'This track has been banned by the host'
+                  : isArtistBanned
+                  ? 'An artist on this track has been banned by the host'
+                  : (!allowExplicit && isExplicit)
+                  ? 'Explicit tracks are disabled for this session'
+                  : null;
+                const disabled = Boolean(disabledReason);
+                const coverImage = track.album?.images?.[2]?.url ?? track.album?.images?.[0]?.url;
 
                 return (
                   <div
@@ -166,21 +189,31 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
                         void handleAddTrack(track.id);
                       }
                     }}
-                    title={disabled ? 'Explicit tracks are disabled for this session' : undefined}
+                    title={disabled ? disabledReason ?? undefined : undefined}
                   >
-                    {track.album.images[2] && (
+                    {coverImage ? (
                       <img
-                        src={track.album.images[2].url}
+                        src={coverImage}
                         alt={track.name}
                         className="w-12 h-12 rounded"
                       />
-                    )}
+                    ) : null}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="text-white font-semibold truncate">{track.name}</h4>
                         {isExplicit && (
                           <span className={`px-2 py-0.5 rounded text-xs font-semibold ${disabled ? 'bg-gray-700 text-gray-300' : 'bg-spotify-green/20 text-spotify-green'}`}>
                             Explicit
+                          </span>
+                        )}
+                        {isBanned && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-300">
+                            Banned
+                          </span>
+                        )}
+                        {isArtistBanned && !isBanned && (
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-red-500/20 text-red-300">
+                            Artist banned
                           </span>
                         )}
                       </div>
@@ -200,7 +233,7 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
                         void handleAddTrack(track.id);
                       }}
                       disabled={disabled}
-                      aria-label={disabled ? 'Explicit tracks disabled' : 'Add to queue'}
+                      aria-label={disabled ? disabledReason ?? 'Track unavailable' : 'Add to queue'}
                     >
                       <Plus size={24} />
                     </button>

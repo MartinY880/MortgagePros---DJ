@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { bannedTracksService } from './bannedTracks.service';
 
 const prisma = new PrismaClient();
 
@@ -151,8 +152,21 @@ export class QueueService {
     trackAlbum: string | null,
     trackImage: string | null,
     trackDuration: number,
+    artistSpotifyIds: string[],
     actor: { userId?: string; guestId?: string }
   ) {
+    const bannedArtist = await bannedTracksService.findBannedArtist(sessionId, artistSpotifyIds);
+
+    if (bannedArtist) {
+      throw new Error(`Artist "${bannedArtist.artistName}" has been banned by the host`);
+    }
+
+    const banned = await bannedTracksService.isTrackBanned(sessionId, spotifyTrackId);
+
+    if (banned) {
+      throw new Error('Track has been banned by the host');
+    }
+
     // Check for duplicates in unplayed queue
     const existing = await prisma.queueItem.findFirst({
       where: {

@@ -13,6 +13,7 @@ import WebPlayer from '../components/WebPlayer';
 import OutputDeviceSelector from '../components/OutputDeviceSelector';
 import PlaylistSelector from '../components/PlaylistSelector';
 import ScheduledPlaybackManager from '../components/ScheduledPlaybackManager';
+import BannedTracksManager from '../components/BannedTracksManager';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
 
@@ -547,7 +548,10 @@ export default function SessionPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {isHost && (
-              <ScheduledPlaybackManager sessionId={session.id} canManage />
+              <>
+                <ScheduledPlaybackManager sessionId={session.id} canManage />
+                <BannedTracksManager sessionId={session.id} />
+              </>
             )}
             <Leaderboard
               sessionId={session.id}

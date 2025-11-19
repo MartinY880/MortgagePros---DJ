@@ -65,6 +65,12 @@ export class SpotifyService {
     return data.body.tracks?.items || [];
   }
 
+  async searchArtists(query: string, accessToken: string) {
+    this.spotifyApi.setAccessToken(accessToken);
+    const data = await this.spotifyApi.searchArtists(query, { limit: 20 });
+    return data.body.artists?.items || [];
+  }
+
   async getTrack(trackId: string, accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
     const data = await this.spotifyApi.getTrack(trackId);

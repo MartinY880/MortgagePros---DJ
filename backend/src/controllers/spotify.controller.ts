@@ -4,6 +4,7 @@ import { sessionService } from '../services/session.service';
 import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
 import { queueService } from '../services/queue.service';
 import { playbackTargetService } from '../services/playbackTarget.service';
+import { bannedTracksService } from '../services/bannedTracks.service';
 
 export class SpotifyController {
   async getPlaybackToken(req: Request, res: Response) {
@@ -67,7 +68,7 @@ export class SpotifyController {
 
   async search(req: Request, res: Response) {
     try {
-  const { q, sessionId } = req.query;
+      const { q, sessionId } = req.query;
 
       if (!q || typeof q !== 'string') {
         return res.status(400).json({ error: 'Search query is required' });
@@ -104,10 +105,72 @@ export class SpotifyController {
       const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
       const tracks = await spotifyService.searchTracks(q, accessToken);
 
-      res.json({ tracks });
+      let bannedTrackIds: string[] = [];
+      let bannedArtistIds: string[] = [];
+
+      if (sessionId && typeof sessionId === 'string') {
+        [bannedTrackIds, bannedArtistIds] = await Promise.all([
+          bannedTracksService.getBannedTrackIdsForSession(sessionId),
+          bannedTracksService.getBannedArtistIdsForSession(sessionId),
+        ]);
+      }
+
+      res.json({ tracks, bannedTrackIds, bannedArtistIds });
     } catch (error) {
       console.error('Search error:', error);
       res.status(500).json({ error: 'Failed to search tracks' });
+    }
+  }
+
+  async searchArtists(req: Request, res: Response) {
+    try {
+      const { q, sessionId } = req.query;
+
+      if (!q || typeof q !== 'string') {
+        return res.status(400).json({ error: 'Search query is required' });
+      }
+
+      let tokenOwnerId: string | null = null;
+
+      if (sessionId && typeof sessionId === 'string') {
+        const session = await sessionService.getSession(sessionId);
+
+        if (!session || !session.isActive) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+
+        const isHost = req.session.userId === session.hostId;
+        const guestData = req.session.guestSessions?.[sessionId];
+
+        if (!isHost && !guestData) {
+          return res.status(401).json({ error: 'Join the session before searching' });
+        }
+
+        tokenOwnerId = session.hostId;
+        if (session.isActive) {
+          playbackService.ensureMonitor(sessionId, session.hostId);
+        }
+      } else if (req.session.userId) {
+        tokenOwnerId = req.session.userId;
+      }
+
+      if (!tokenOwnerId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
+      const artists = await spotifyService.searchArtists(q, accessToken);
+
+      let bannedArtistIds: string[] = [];
+
+      if (sessionId && typeof sessionId === 'string') {
+        bannedArtistIds = await bannedTracksService.getBannedArtistIdsForSession(sessionId);
+      }
+
+      res.json({ artists, bannedArtistIds });
+    } catch (error) {
+      console.error('Artist search error:', error);
+      res.status(500).json({ error: 'Failed to search artists' });
     }
   }
 

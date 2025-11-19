@@ -9,6 +9,7 @@ router.get('/token', requireClerkAuth, requireAuth, spotifyController.getPlaybac
 router.get('/playlists', requireClerkAuth, requireAuth, spotifyController.getUserPlaylists);
 router.post('/playlist/start', requireClerkAuth, requireAuth, spotifyController.startPlaylist);
 router.get('/search', requireClerkAuth, optionalAuth, spotifyController.search);
+router.get('/search-artists', requireClerkAuth, optionalAuth, spotifyController.searchArtists);
 router.get('/playback', requireClerkAuth, optionalAuth, spotifyController.getCurrentPlayback);
 router.post('/play', requireClerkAuth, requireAuth, spotifyController.play);
 router.post('/pause', requireClerkAuth, requireAuth, spotifyController.pause);

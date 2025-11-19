@@ -119,6 +119,7 @@ export class QueueController {
       }
 
       // Add to queue
+      const artistIds = (track.artists ?? []).map((a: any) => a.id).filter((id: string | null | undefined) => Boolean(id)) as string[];
       const queueItem = await queueService.addToQueue(
         sessionId,
         track.id,
@@ -127,6 +128,7 @@ export class QueueController {
         track.album.name,
         track.album.images[0]?.url || null,
         track.duration_ms,
+        artistIds,
         actor
       );
 
@@ -179,7 +181,15 @@ export class QueueController {
         }
       }
 
-      res.status(error.message === 'Track already in queue' ? 400 : 500)
+      const knownClientErrorMessages = new Set([
+        'Track already in queue',
+        'Track has been banned by the host',
+      ]);
+
+      const isArtistBanError = typeof error.message === 'string' && error.message.startsWith('Artist "') && error.message.endsWith('has been banned by the host');
+      const status = knownClientErrorMessages.has(error.message) || isArtistBanError ? 400 : 500;
+
+      res.status(status)
         .json({ error: error.message || 'Failed to add to queue' });
     }
   };

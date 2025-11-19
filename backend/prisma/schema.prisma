@@ -32,6 +32,9 @@ model User {
   scheduledPlaybacks ScheduledPlayback[] @relation("ScheduledPlaybackCreator")
   queueItems     QueueItem[]
   votes          Vote[]
+  bannedTrackLists BannedTrackList[] @relation("BannedListOwner")
+  bannedTracks    BannedTrack[]      @relation("BannedTrackCreator")
+  bannedArtists   BannedArtist[]     @relation("BannedArtistCreator")
 }
 
 model Session {
@@ -112,6 +115,55 @@ model Guest {
 
   @@index([sessionId])
   @@index([clerkUserId])
+}
+
+model BannedTrackList {
+  id        String   @id @default(uuid())
+  ownerId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner     User     @relation("BannedListOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  tracks    BannedTrack[]
+  artists   BannedArtist[]
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+}
+
+model BannedTrack {
+  id             String   @id @default(uuid())
+  listId         String
+  spotifyTrackId String
+  trackName      String
+  trackArtist    String
+  trackAlbum     String?
+  trackImage     String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  list           BannedTrackList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdBy      User            @relation("BannedTrackCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([listId, spotifyTrackId])
+  @@index([spotifyTrackId])
+}
+
+model BannedArtist {
+  id             String   @id @default(uuid())
+  listId         String
+  spotifyArtistId String
+  artistName     String
+  artistImage    String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  list           BannedTrackList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdBy      User            @relation("BannedArtistCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([listId, spotifyArtistId])
+  @@index([spotifyArtistId])
 }
 
 enum ScheduledPlaybackStatus {

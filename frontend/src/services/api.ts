@@ -96,6 +96,8 @@ export const queueApi = {
 export const spotifyApi = {
   search: (sessionId: string, query: string) =>
     api.get(`/spotify/search?q=${encodeURIComponent(query)}&sessionId=${sessionId}`),
+  searchArtists: (sessionId: string, query: string) =>
+    api.get(`/spotify/search-artists?q=${encodeURIComponent(query)}&sessionId=${sessionId}`),
   getPlayback: (sessionId: string) => api.get(`/spotify/playback?sessionId=${sessionId}`),
   play: () => api.post('/spotify/play'),
   pause: () => api.post('/spotify/pause'),
@@ -104,6 +106,36 @@ export const spotifyApi = {
   selectDevice: (deviceId: string | null) => api.post('/spotify/devices/select', { deviceId }),
   getPlaylists: () => api.get('/spotify/playlists'),
   startPlaylist: (playlistUri: string) => api.post('/spotify/playlist/start', { playlistUri }),
+};
+
+export const bannedTracksApi = {
+  list: (sessionId: string) => api.get(`/sessions/${sessionId}/banned-track-lists`),
+  createList: (sessionId: string, payload: { name: string }) =>
+    api.post(`/sessions/${sessionId}/banned-track-lists`, payload),
+  addTrack: (
+    sessionId: string,
+    listId: string,
+    track: {
+      spotifyTrackId: string;
+      trackName: string;
+      trackArtist: string;
+      trackAlbum?: string | null;
+      trackImage?: string | null;
+    }
+  ) => api.post(`/sessions/${sessionId}/banned-track-lists/${listId}/tracks`, { track }),
+  removeTrack: (sessionId: string, listId: string, trackId: string) =>
+    api.delete(`/sessions/${sessionId}/banned-track-lists/${listId}/tracks/${trackId}`),
+  addArtist: (
+    sessionId: string,
+    listId: string,
+    artist: {
+      spotifyArtistId: string;
+      artistName: string;
+      artistImage?: string | null;
+    }
+  ) => api.post(`/sessions/${sessionId}/banned-track-lists/${listId}/artists`, { artist }),
+  removeArtist: (sessionId: string, listId: string, artistId: string) =>
+    api.delete(`/sessions/${sessionId}/banned-track-lists/${listId}/artists/${artistId}`),
 };
 
 export const guestApi = {

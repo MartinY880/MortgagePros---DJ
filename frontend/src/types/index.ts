@@ -79,7 +79,7 @@ export interface QueueState {
 export interface SpotifyTrack {
   id: string;
   name: string;
-  artists: { name: string }[];
+  artists: { id: string; name: string }[];
   album: {
     name: string;
     images: { url: string }[];
@@ -87,6 +87,42 @@ export interface SpotifyTrack {
   duration_ms: number;
   uri: string;
   explicit: boolean;
+}
+
+export interface SpotifyArtist {
+  id: string;
+  name: string;
+  images?: { url: string }[];
+}
+
+export interface BannedTrack {
+  id: string;
+  listId: string;
+  spotifyTrackId: string;
+  trackName: string;
+  trackArtist: string;
+  trackAlbum: string | null;
+  trackImage: string | null;
+  createdAt: string;
+}
+
+export interface BannedArtist {
+  id: string;
+  listId: string;
+  spotifyArtistId: string;
+  artistName: string;
+  artistImage: string | null;
+  createdAt: string;
+}
+
+export interface BannedTrackList {
+  id: string;
+  ownerId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  tracks: BannedTrack[];
+  artists: BannedArtist[];
 }
 
 export interface PlaybackState {
