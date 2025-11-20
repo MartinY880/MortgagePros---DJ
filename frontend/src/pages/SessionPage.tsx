@@ -30,6 +30,7 @@ export default function SessionPage() {
   const [autoJoinMessage, setAutoJoinMessage] = useState<string | null>(null);
   const [signInPrompted, setSignInPrompted] = useState(false);
   const [guestCredits, setGuestCredits] = useState<CreditState | null>(null);
+  const [webPlayerReady, setWebPlayerReady] = useState(false);
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { openSignIn } = useClerk();
 
@@ -80,6 +81,10 @@ export default function SessionPage() {
       setGuestCredits(null);
     }
   }, [participant]);
+
+  useEffect(() => {
+    setWebPlayerReady(false);
+  }, [sessionId]);
 
   const executeJoin = useCallback(async () => {
     if (!sessionId) {
@@ -422,77 +427,89 @@ export default function SessionPage() {
           </div>
         )}
         {/* Web Player - only for hosts */}
-        {participant?.type === 'host' && (
-          <div className="mb-6 grid gap-4 md:grid-cols-2">
-            <WebPlayer 
-              sessionId={session.id}
-              onDeviceReady={async (deviceId) => {
-                console.log('Web player device ready, evaluating auto-select:', deviceId);
-
-                try {
-                  const response = await spotifyApi.listDevices();
-                  const {
-                    selectedDeviceId,
-                    librespotEnabled,
-                  } = response.data ?? {};
-
-                  if (librespotEnabled) {
-                    console.log('Managed playback active; skipping web player auto-selection.');
-                    return;
-                  }
-
-                  if (selectedDeviceId && selectedDeviceId !== deviceId) {
-                    console.log('A manual playback device is already selected; leaving it unchanged.');
-                    return;
-                  }
-
-                  if (selectedDeviceId === deviceId) {
-                    console.log('Web player is already the active device.');
-                    return;
-                  }
-
-                  // Auto-select the web player device only as a fallback when nothing else is selected
-                  let retries = 3;
-                  while (retries > 0) {
-                    try {
-                      await spotifyApi.selectDevice(deviceId);
-                      console.log('✅ Web player device auto-selected successfully');
-                      break;
-                    } catch (error: any) {
-                      retries--;
-                      console.warn(
-                        `Failed to auto-select web player device (${3 - retries}/3):`,
-                        error?.response?.data || error?.message
-                      );
-                      if (retries > 0) {
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
-                      } else {
-                        console.error('❌ Failed to auto-select web player device after all retries');
-                      }
-                    }
-                  }
-                } catch (error) {
-                  console.warn('Unable to determine playback device preference; skipping auto-select.', error);
-                }
-              }}
-            />
-            <OutputDeviceSelector 
-              onDeviceSelected={(deviceId) => {
-                console.log('Output device selected:', deviceId);
-              }}
-            />
-          </div>
-        )}
-        {/* Playlist Selector - only for hosts */}
         {isHost && (
-          <div className="mb-6">
-            <PlaylistSelector 
-              onPlaylistStarted={() => {
-                console.log('Playlist started');
-                // Refresh playback state
-                void mutatePlayback();
-              }}
-            />
+          <div className="mb-8">
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="space-y-4">
+                <WebPlayer 
+                  sessionId={session.id}
+                  onDeviceReady={async (deviceId) => {
+                    setWebPlayerReady(true);
+                    console.log('Web player device ready, evaluating auto-select:', deviceId);
+
+                    try {
+                      const response = await spotifyApi.listDevices();
+                      const {
+                        selectedDeviceId,
+                        librespotEnabled,
+                      } = response.data ?? {};
+
+                      if (librespotEnabled) {
+                        console.log('Managed playback active; skipping web player auto-selection.');
+                        return;
+                      }
+
+                      if (selectedDeviceId && selectedDeviceId !== deviceId) {
+                        console.log('A manual playback device is already selected; leaving it unchanged.');
+                        return;
+                      }
+
+                      if (selectedDeviceId === deviceId) {
+                        console.log('Web player is already the active device.');
+                        return;
+                      }
+
+                      // Auto-select the web player device only as a fallback when nothing else is selected
+                      let retries = 3;
+                      while (retries > 0) {
+                        try {
+                          await spotifyApi.selectDevice(deviceId);
+                          console.log('✅ Web player device auto-selected successfully');
+                          break;
+                        } catch (error: any) {
+                          retries--;
+                          console.warn(
+                            `Failed to auto-select web player device (${3 - retries}/3):`,
+                            error?.response?.data || error?.message
+                          );
+                          if (retries > 0) {
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                          } else {
+                            console.error('❌ Failed to auto-select web player device after all retries');
+                          }
+                        }
+                      }
+                    } catch (error) {
+                      console.warn('Unable to determine playback device preference; skipping auto-select.', error);
+                    }
+                  }}
+                />
+                <OutputDeviceSelector 
+                  onDeviceSelected={(deviceId) => {
+                    console.log('Output device selected:', deviceId);
+                  }}
+                  webPlayerReady={webPlayerReady}
+                />
+              </div>
+
+              <div className="space-y-6">
+                <ScheduledPlaybackManager sessionId={session.id} canManage />
+              </div>
+
+              <div className="space-y-6">
+                <BannedTracksManager sessionId={session.id} />
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <PlaylistSelector 
+                onPlaylistStarted={() => {
+                  console.log('Playlist started');
+                  // Refresh playback state
+                  void mutatePlayback();
+                }}
+              />
+            </div>
           </div>
         )}
         <div className="grid lg:grid-cols-3 gap-6">
@@ -547,12 +564,6 @@ export default function SessionPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {isHost && (
-              <>
-                <ScheduledPlaybackManager sessionId={session.id} canManage />
-                <BannedTracksManager sessionId={session.id} />
-              </>
-            )}
             <Leaderboard
               sessionId={session.id}
               title="Performance Leaderboard"

@@ -94,8 +94,30 @@ export const queueApi = {
 };
 
 export const spotifyApi = {
-  search: (sessionId: string, query: string) =>
-    api.get(`/spotify/search?q=${encodeURIComponent(query)}&sessionId=${sessionId}`),
+  search: (
+    sessionId: string,
+    query: string,
+    options?: { hideRestricted?: boolean; offset?: number; limit?: number }
+  ) => {
+    const params = new URLSearchParams({
+      q: query,
+      sessionId,
+    });
+
+    if (options?.hideRestricted) {
+      params.append('hideRestricted', 'true');
+    }
+
+    if (typeof options?.offset === 'number' && Number.isFinite(options.offset)) {
+      params.append('offset', String(Math.max(0, Math.floor(options.offset))));
+    }
+
+    if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
+      params.append('limit', String(Math.min(Math.max(Math.floor(options.limit), 1), 50)));
+    }
+
+    return api.get(`/spotify/search?${params.toString()}`);
+  },
   searchArtists: (sessionId: string, query: string) =>
     api.get(`/spotify/search-artists?q=${encodeURIComponent(query)}&sessionId=${sessionId}`),
   getPlayback: (sessionId: string) => api.get(`/spotify/playback?sessionId=${sessionId}`),

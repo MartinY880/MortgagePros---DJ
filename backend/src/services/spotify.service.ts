@@ -59,10 +59,23 @@ export class SpotifyService {
     return data.body;
   }
 
-  async searchTracks(query: string, accessToken: string) {
+  async searchTracks(
+    query: string,
+    accessToken: string,
+    options?: { limit?: number; offset?: number }
+  ) {
     this.spotifyApi.setAccessToken(accessToken);
-    const data = await this.spotifyApi.searchTracks(query, { limit: 20 });
-    return data.body.tracks?.items || [];
+    const limit = Math.min(Math.max(options?.limit ?? 50, 1), 50);
+    const offset = Math.max(options?.offset ?? 0, 0);
+    const data = await this.spotifyApi.searchTracks(query, { limit, offset });
+    const tracks = data.body.tracks;
+
+    return {
+      items: tracks?.items ?? [],
+      limit: tracks?.limit ?? limit,
+      offset: tracks?.offset ?? offset,
+      total: tracks?.total ?? tracks?.items?.length ?? 0,
+    };
   }
 
   async searchArtists(query: string, accessToken: string) {

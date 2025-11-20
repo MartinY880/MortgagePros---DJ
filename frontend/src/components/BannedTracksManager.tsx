@@ -503,29 +503,31 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
           <p className="text-sm text-gray-400">No tracks banned yet. Add songs using the search above.</p>
         )}
         {selectedList && selectedList.tracks.length > 0 && (
-          <ul className="space-y-2">
-            {selectedList.tracks.map((track) => (
-              <li
-                key={track.id}
-                className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
-              >
-                {track.trackImage && (
-                  <img src={track.trackImage} alt={track.trackName} className="w-10 h-10 rounded hidden sm:block" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-semibold truncate">{track.trackName}</p>
-                  <p className="text-xs text-gray-400 truncate">{track.trackArtist}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveTrack(track.id)}
-                  className="text-red-400 hover:text-red-300 transition"
+          <div className="max-h-64 overflow-y-auto pr-1">
+            <ul className="space-y-2">
+              {selectedList.tracks.map((track) => (
+                <li
+                  key={track.id}
+                  className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
                 >
-                  <Trash2 size={18} />
-                </button>
-              </li>
-            ))}
-          </ul>
+                  {track.trackImage && (
+                    <img src={track.trackImage} alt={track.trackName} className="w-10 h-10 rounded hidden sm:block" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold truncate">{track.trackName}</p>
+                    <p className="text-xs text-gray-400 truncate">{track.trackArtist}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveTrack(track.id)}
+                    className="text-red-400 hover:text-red-300 transition"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -540,28 +542,30 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
           <p className="text-sm text-gray-400">No artists banned yet. Add artists using the search above.</p>
         )}
         {selectedList && selectedList.artists.length > 0 && (
-          <ul className="space-y-2">
-            {selectedList.artists.map((artist) => (
-              <li
-                key={artist.id}
-                className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
-              >
-                {artist.artistImage && (
-                  <img src={artist.artistImage} alt={artist.artistName} className="w-10 h-10 rounded hidden sm:block" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-semibold truncate">{artist.artistName}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveArtist(artist.id)}
-                  className="text-red-400 hover:text-red-300 transition"
+          <div className="max-h-64 overflow-y-auto pr-1">
+            <ul className="space-y-2">
+              {selectedList.artists.map((artist) => (
+                <li
+                  key={artist.id}
+                  className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
                 >
-                  <Trash2 size={18} />
-                </button>
-              </li>
-            ))}
-          </ul>
+                  {artist.artistImage && (
+                    <img src={artist.artistImage} alt={artist.artistName} className="w-10 h-10 rounded hidden sm:block" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold truncate">{artist.artistName}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveArtist(artist.id)}
+                    className="text-red-400 hover:text-red-300 transition"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>

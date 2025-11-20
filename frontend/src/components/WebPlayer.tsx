@@ -89,15 +89,5 @@ export default function WebPlayer({ sessionId, onDeviceReady }: WebPlayerProps) 
     );
   }
 
-  return (
-    <div className="bg-spotify-green/10 border border-spotify-green rounded-lg p-4 text-sm">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-3 h-3 bg-spotify-green rounded-full animate-pulse"></div>
-        <span className="text-spotify-green font-semibold">Web Player Ready</span>
-      </div>
-      <p className="text-gray-300 text-xs">
-        Backend control active - select an output device to hear the music
-      </p>
-    </div>
-  );
+  return null;
 }

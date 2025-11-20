@@ -68,16 +68,17 @@ export class SpotifyController {
 
   async search(req: Request, res: Response) {
     try {
-      const { q, sessionId } = req.query;
+      const { q, sessionId, hideRestricted, offset, limit } = req.query;
 
       if (!q || typeof q !== 'string') {
         return res.status(400).json({ error: 'Search query is required' });
       }
 
       let tokenOwnerId: string | null = null;
+      let session: Awaited<ReturnType<typeof sessionService.getSession>> | null = null;
 
       if (sessionId && typeof sessionId === 'string') {
-        const session = await sessionService.getSession(sessionId);
+        session = await sessionService.getSession(sessionId);
 
         if (!session || !session.isActive) {
           return res.status(404).json({ error: 'Session not found' });
@@ -103,7 +104,16 @@ export class SpotifyController {
       }
 
       const accessToken = await spotifyService.ensureValidToken(tokenOwnerId);
-      const tracks = await spotifyService.searchTracks(q, accessToken);
+      const parsedLimit = typeof limit === 'string' ? Number.parseInt(limit, 10) : NaN;
+      const parsedOffset = typeof offset === 'string' ? Number.parseInt(offset, 10) : NaN;
+
+      const pagination = {
+        limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+        offset: Number.isFinite(parsedOffset) ? parsedOffset : undefined,
+      };
+
+      const trackPage = await spotifyService.searchTracks(q, accessToken, pagination);
+      const rawTracks = trackPage.items;
 
       let bannedTrackIds: string[] = [];
       let bannedArtistIds: string[] = [];
@@ -115,7 +125,51 @@ export class SpotifyController {
         ]);
       }
 
-      res.json({ tracks, bannedTrackIds, bannedArtistIds });
+      const shouldHideRestricted = hideRestricted === 'true';
+      const allowExplicit = session?.allowExplicit ?? true;
+
+      const filteredTracks = shouldHideRestricted
+        ? rawTracks.filter((track: any) => {
+            if (!allowExplicit && track?.explicit) {
+              return false;
+            }
+
+            if (bannedTrackIds.includes(track?.id)) {
+              return false;
+            }
+
+            const artistIds = Array.isArray(track?.artists)
+              ? track.artists.map((artist: any) => artist?.id).filter(Boolean)
+              : [];
+
+            if (artistIds.some((artistId: string) => bannedArtistIds.includes(artistId))) {
+              return false;
+            }
+
+            return true;
+          })
+        : rawTracks;
+
+      const filteredOutCount = rawTracks.length - filteredTracks.length;
+      const pageLimit = trackPage.limit ?? filteredTracks.length;
+      const pageOffset = trackPage.offset ?? pagination.offset ?? 0;
+      const total = trackPage.total ?? filteredTracks.length;
+      const nextOffsetCandidate = pageOffset + pageLimit;
+      const hasMore = nextOffsetCandidate < total;
+
+      res.json({
+        tracks: filteredTracks,
+        bannedTrackIds,
+        bannedArtistIds,
+        meta: {
+          total,
+          offset: pageOffset,
+          limit: pageLimit,
+          nextOffset: hasMore ? nextOffsetCandidate : null,
+          hasMore,
+          filteredOutCount,
+        },
+      });
     } catch (error) {
       console.error('Search error:', error);
       res.status(500).json({ error: 'Failed to search tracks' });

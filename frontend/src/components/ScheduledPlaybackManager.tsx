@@ -94,7 +94,7 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
   }, [searchTerm, canManage]);
 
   const searchFetcher: Fetcher<SpotifyTrack[], [string, string, string]> = async ([, id, term]) => {
-    const response = await spotifyApi.search(id, term);
+    const response = await spotifyApi.search(id, term, { hideRestricted: true });
     const tracks: SpotifyTrack[] = response.data?.tracks ?? response.data ?? [];
     return tracks;
   };

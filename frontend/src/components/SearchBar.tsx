@@ -1,6 +1,7 @@
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { Search, Plus } from 'lucide-react';
-import useSWR, { Fetcher } from 'swr';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Plus, Loader2 } from 'lucide-react';
+import useSWRInfinite from 'swr/infinite';
+import type { Fetcher } from 'swr';
 import { AxiosError } from 'axios';
 import { spotifyApi, queueApi } from '../services/api';
 import type { CreditState, SpotifyTrack } from '../types';
@@ -12,6 +13,22 @@ interface SearchBarProps {
   canSearch: boolean;
   onRequireAccess: () => void;
 }
+
+const PAGE_SIZE = 50;
+
+type SearchResponse = {
+  tracks: SpotifyTrack[];
+  bannedTrackIds?: string[];
+  bannedArtistIds?: string[];
+  meta?: {
+    total: number;
+    offset: number;
+    limit: number;
+    nextOffset: number | null;
+    hasMore: boolean;
+    filteredOutCount?: number;
+  };
+};
 
 export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
   const [query, setQuery] = useState('');
@@ -42,35 +59,92 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
 
     return () => clearTimeout(timer);
   }, [query, canSearch, onRequireAccess]);
+  const resultsContainerRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const lastQueryRef = useRef<string>('');
+  const lastSessionRef = useRef<string>(sessionId);
 
-  type SearchResponse = {
-    tracks: SpotifyTrack[];
-    bannedTrackIds?: string[];
-    bannedArtistIds?: string[];
-  };
+  const searchFetcher: Fetcher<SearchResponse, [string, string, string, string]> = async ([, id, term, rawOffset]) => {
+    const offset = Number.parseInt(rawOffset ?? '0', 10) || 0;
+    const response = await spotifyApi.search(id, term, { hideRestricted: true, limit: PAGE_SIZE, offset });
+    const payload = response.data as any;
+    const tracks: SpotifyTrack[] = payload?.tracks ?? payload ?? [];
+    const rawMeta = payload?.meta ?? {};
+    const trackList = Array.isArray(tracks) ? tracks : [];
+    const derivedHasMore = typeof rawMeta.hasMore === 'boolean' ? rawMeta.hasMore : trackList.length === PAGE_SIZE;
+    const meta = {
+      total: typeof rawMeta.total === 'number' ? rawMeta.total : offset + trackList.length,
+      offset: typeof rawMeta.offset === 'number' ? rawMeta.offset : offset,
+      limit: typeof rawMeta.limit === 'number' ? rawMeta.limit : PAGE_SIZE,
+      nextOffset:
+        rawMeta.nextOffset !== undefined && rawMeta.nextOffset !== null
+          ? Number(rawMeta.nextOffset)
+          : derivedHasMore
+          ? offset + PAGE_SIZE
+          : null,
+      hasMore: derivedHasMore,
+      filteredOutCount: typeof rawMeta.filteredOutCount === 'number' ? rawMeta.filteredOutCount : 0,
+    };
 
-  const searchFetcher: Fetcher<SearchResponse, [string, string, string]> = async ([, id, term]) => {
-    const response = await spotifyApi.search(id, term);
-    const tracks: SpotifyTrack[] = response.data?.tracks ?? response.data ?? [];
     return {
-      tracks,
-      bannedTrackIds: response.data?.bannedTrackIds ?? [],
-      bannedArtistIds: response.data?.bannedArtistIds ?? [],
+      tracks: trackList,
+      bannedTrackIds: payload?.bannedTrackIds ?? [],
+      bannedArtistIds: payload?.bannedArtistIds ?? [],
+      meta,
     };
   };
 
+  const getKey = (
+    pageIndex: number,
+    previousPageData: SearchResponse | null
+  ): [string, string, string, string] | null => {
+    if (!canExecuteSearch) {
+      return null;
+    }
+
+    if (pageIndex === 0) {
+      return ['spotify-search', sessionId, debouncedQuery, '0'];
+    }
+
+    const nextOffset = previousPageData?.meta?.nextOffset;
+    if (nextOffset === null || nextOffset === undefined) {
+      return null;
+    }
+
+    return ['spotify-search', sessionId, debouncedQuery, String(nextOffset)];
+  };
+
   const {
-    data: searchData,
+    data: searchPages,
     error: searchError,
     isValidating,
-  } = useSWR<SearchResponse, AxiosError>(
-    canExecuteSearch ? ['spotify-search', sessionId, debouncedQuery] : null,
-    searchFetcher,
-    {
-      keepPreviousData: true,
-      revalidateOnFocus: false,
+    size,
+    setSize,
+  } = useSWRInfinite<SearchResponse, AxiosError>(getKey, searchFetcher, {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+  });
+
+  useEffect(() => {
+    const sessionChanged = lastSessionRef.current !== sessionId;
+    if (sessionChanged) {
+      lastSessionRef.current = sessionId;
+      lastQueryRef.current = '';
     }
-  );
+
+    if (!canExecuteSearch) {
+      if (size !== 0) {
+        void setSize(0);
+      }
+      lastQueryRef.current = '';
+      return;
+    }
+
+    if (sessionChanged || lastQueryRef.current !== debouncedQuery) {
+      lastQueryRef.current = debouncedQuery;
+      void setSize(1);
+    }
+  }, [canExecuteSearch, debouncedQuery, sessionId, setSize, size]);
 
   useEffect(() => {
     if (!searchError) {
@@ -84,10 +158,91 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     }
   }, [searchError, onRequireAccess]);
 
-  const bannedTrackIds = useMemo(() => new Set(searchData?.bannedTrackIds ?? []), [searchData?.bannedTrackIds]);
-  const bannedArtistIds = useMemo(() => new Set(searchData?.bannedArtistIds ?? []), [searchData?.bannedArtistIds]);
-  const results = searchData?.tracks ?? [];
-  const searching = isValidating;
+  const bannedTrackIds = useMemo(() => {
+    const set = new Set<string>();
+    (searchPages ?? []).forEach((page) => {
+      (page?.bannedTrackIds ?? []).forEach((id) => set.add(id));
+    });
+    return set;
+  }, [searchPages]);
+
+  const bannedArtistIds = useMemo(() => {
+    const set = new Set<string>();
+    (searchPages ?? []).forEach((page) => {
+      (page?.bannedArtistIds ?? []).forEach((id) => set.add(id));
+    });
+    return set;
+  }, [searchPages]);
+
+  const aggregatedTracks = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: SpotifyTrack[] = [];
+
+    (searchPages ?? []).forEach((page) => {
+      (page?.tracks ?? []).forEach((track: SpotifyTrack) => {
+        if (!track?.id || seen.has(track.id)) {
+          return;
+        }
+        seen.add(track.id);
+        merged.push(track);
+      });
+    });
+
+    return merged;
+  }, [searchPages]);
+
+  const filteredResults = useMemo(() => {
+    return aggregatedTracks.filter((track: SpotifyTrack) => {
+      if (!allowExplicit && track.explicit) {
+        return false;
+      }
+
+      if (bannedTrackIds.has(track.id)) {
+        return false;
+      }
+
+      const trackArtistIds = track.artists?.map((artist) => artist.id).filter(Boolean) ?? [];
+      return !trackArtistIds.some((artistId) => bannedArtistIds.has(artistId));
+    });
+  }, [aggregatedTracks, allowExplicit, bannedTrackIds, bannedArtistIds]);
+
+  const initialLoading = isValidating && ((searchPages?.length ?? 0) === 0);
+  const isLoadingMore = isValidating && size > (searchPages?.length ?? 0);
+  const lastPage = searchPages && searchPages.length > 0 ? searchPages[searchPages.length - 1] : null;
+  const hasMore = Boolean(lastPage?.meta?.hasMore);
+
+  useEffect(() => {
+    if (!showResults) {
+      return;
+    }
+
+    const root = resultsContainerRef.current;
+    const sentinel = loadMoreRef.current;
+
+    if (!root || !sentinel) {
+      return;
+    }
+
+    if (!hasMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !isLoadingMore) {
+          void setSize((previous) => previous + 1);
+        }
+      },
+      { root, rootMargin: '120px 0px 120px 0px' }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [showResults, hasMore, isLoadingMore, setSize]);
 
   const handleAddTrack = async (trackId: string) => {
     if (!canSearch) {
@@ -96,9 +251,9 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     }
 
     try {
-  const response = await queueApi.add(sessionId, trackId);
-  const credits = response?.data?.credits as CreditState | undefined;
-  onTrackAdded(credits ? { credits } : undefined);
+      const response = await queueApi.add(sessionId, trackId);
+      const credits = response?.data?.credits as CreditState | undefined;
+      onTrackAdded(credits ? { credits } : undefined);
       setShowResults(false);
       setQuery('');
       setDebouncedQuery('');
@@ -134,26 +289,28 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
             />
           </div>
         </div>
-        {!allowExplicit && (
-          <p className="mt-2 text-xs text-gray-400">
-            Explicit tracks are disabled for this session and will be shown but cannot be added.
-          </p>
-        )}
       </div>
 
       {/* Search Results */}
       {showResults && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray rounded-lg shadow-xl max-h-96 overflow-y-auto z-20">
-          {searching && (
-            <div className="p-3 text-gray-400 text-sm">Searching…</div>
-          )}
-          {!searching && results.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
-              No results found
+        <div
+          ref={resultsContainerRef}
+          className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray rounded-lg shadow-xl max-h-96 overflow-y-auto z-20"
+        >
+          {initialLoading && (
+            <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+              <Loader2 className="animate-spin" size={16} />
+              <span>Searching…</span>
             </div>
-          ) : (
+          )}
+
+          {!initialLoading && filteredResults.length === 0 && (
+            <div className="p-8 text-center text-gray-400">No results found</div>
+          )}
+
+          {filteredResults.length > 0 && (
             <div className="p-2">
-              {results.map((track: SpotifyTrack) => {
+              {filteredResults.map((track: SpotifyTrack) => {
                 const isExplicit = Boolean(track.explicit);
                 const isBanned = bannedTrackIds.has(track.id);
                 const isArtistBanned = track.artists.some((artist) => bannedArtistIds.has(artist.id));
@@ -242,6 +399,15 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
               })}
             </div>
           )}
+
+          {isLoadingMore && (
+            <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+              <Loader2 className="animate-spin" size={16} />
+              <span>Loading more…</span>
+            </div>
+          )}
+
+          <div ref={loadMoreRef} className="h-2" />
           <button
             onClick={() => setShowResults(false)}
             className="w-full p-3 text-gray-400 hover:text-white transition border-t border-spotify-black"
