@@ -155,6 +155,19 @@ export class QueueService {
     artistSpotifyIds: string[],
     actor: { userId?: string; guestId?: string }
   ) {
+    // Check session settings first
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { maxSongDuration: true },
+    });
+
+    if (session?.maxSongDuration) {
+      const trackDurationMinutes = trackDuration / 60000; // Convert ms to minutes
+      if (trackDurationMinutes > session.maxSongDuration) {
+        throw new Error(`Track duration (${Math.ceil(trackDurationMinutes)} min) exceeds the session limit of ${session.maxSongDuration} minutes`);
+      }
+    }
+
     const bannedArtist = await bannedTracksService.findBannedArtist(sessionId, artistSpotifyIds);
 
     if (bannedArtist) {

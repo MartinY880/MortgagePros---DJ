@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [sessionName, setSessionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [allowExplicit, setAllowExplicit] = useState(true);
+  const [maxSongDuration, setMaxSongDuration] = useState<number | ''>('');
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export default function Dashboard() {
       const response = await sessionApi.create({
         name: sessionName.trim(),
         allowExplicit,
+        ...(maxSongDuration !== '' && maxSongDuration > 0 ? { maxSongDuration: Number(maxSongDuration) } : {}),
       });
       const session: Session = response.data.session;
       void mutateRecent();
@@ -222,6 +224,21 @@ export default function Dashboard() {
                 checked={allowExplicit}
                 onChange={(e) => setAllowExplicit(e.target.checked)}
                 className="h-5 w-5 accent-spotify-green"
+              />
+            </label>
+
+            <label className="bg-spotify-black px-4 py-3 rounded-lg mb-4 block">
+              <div className="mb-2">
+                <p className="text-white font-semibold text-sm">Max song length (minutes)</p>
+                <p className="text-gray-400 text-xs">Leave empty for no limit.</p>
+              </div>
+              <input
+                type="number"
+                min="1"
+                placeholder="No limit"
+                value={maxSongDuration}
+                onChange={(e) => setMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full bg-spotify-gray text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
               />
             </label>
             

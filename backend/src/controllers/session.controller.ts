@@ -25,7 +25,7 @@ export class SessionController {
 
   create = async (req: Request, res: Response) => {
     try {
-      const { name, allowExplicit } = req.body;
+      const { name, allowExplicit, maxSongDuration } = req.body;
       const userId = req.session.userId!;
 
       if (!name) {
@@ -36,7 +36,11 @@ export class SessionController {
         return res.status(400).json({ error: 'allowExplicit must be a boolean when provided' });
       }
 
-      const session = await sessionService.createSession(userId, name, { allowExplicit });
+      if (typeof maxSongDuration !== 'undefined' && (typeof maxSongDuration !== 'number' || maxSongDuration < 1)) {
+        return res.status(400).json({ error: 'maxSongDuration must be a positive number when provided' });
+      }
+
+      const session = await sessionService.createSession(userId, name, { allowExplicit, maxSongDuration });
       res.json({ session });
     } catch (error) {
       console.error('Create session error:', error);
@@ -294,13 +298,26 @@ export class SessionController {
     try {
       const { id } = req.params;
       const userId = req.session.userId!;
-      const { allowExplicit } = req.body;
+      const { allowExplicit, maxSongDuration } = req.body;
 
-      if (typeof allowExplicit !== 'boolean') {
-        return res.status(400).json({ error: 'allowExplicit must be provided as a boolean' });
+      const settings: { allowExplicit?: boolean; maxSongDuration?: number } = {};
+
+      if (typeof allowExplicit === 'boolean') {
+        settings.allowExplicit = allowExplicit;
       }
 
-      const session = await sessionService.updateSessionSettings(id, userId, { allowExplicit });
+      if (typeof maxSongDuration === 'number') {
+        if (maxSongDuration < 1) {
+          return res.status(400).json({ error: 'maxSongDuration must be a positive number' });
+        }
+        settings.maxSongDuration = maxSongDuration;
+      }
+
+      if (Object.keys(settings).length === 0) {
+        return res.status(400).json({ error: 'At least one setting must be provided' });
+      }
+
+      const session = await sessionService.updateSessionSettings(id, userId, settings);
 
       res.json({ session });
     } catch (error: any) {

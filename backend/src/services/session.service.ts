@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const generateCode = customAlphabet('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 6);
 
 export class SessionService {
-  async createSession(hostId: string, name: string, options?: { allowExplicit?: boolean }) {
+  async createSession(hostId: string, name: string, options?: { allowExplicit?: boolean; maxSongDuration?: number }) {
     const code = generateCode();
 
     const session = await prisma.$transaction(async (tx) => {
@@ -15,6 +15,7 @@ export class SessionService {
           name,
           hostId,
           ...(typeof options?.allowExplicit === 'boolean' ? { allowExplicit: options.allowExplicit } : {}),
+          ...(typeof options?.maxSongDuration === 'number' ? { maxSongDuration: options.maxSongDuration } : {}),
         },
         include: {
           host: {
@@ -245,7 +246,7 @@ export class SessionService {
     });
   }
 
-  async updateSessionSettings(sessionId: string, hostId: string, settings: { allowExplicit?: boolean }) {
+  async updateSessionSettings(sessionId: string, hostId: string, settings: { allowExplicit?: boolean; maxSongDuration?: number }) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       include: {
@@ -270,6 +271,10 @@ export class SessionService {
 
     if (typeof settings.allowExplicit === 'boolean') {
       data.allowExplicit = settings.allowExplicit;
+    }
+
+    if (typeof settings.maxSongDuration === 'number') {
+      data.maxSongDuration = settings.maxSongDuration;
     }
 
     if (Object.keys(data).length === 0) {

@@ -44,6 +44,7 @@ model Session {
   hostId      String
   isActive    Boolean   @default(true)
   allowExplicit Boolean @default(true)
+  maxSongDuration Int?  // Maximum song duration in minutes (null = no limit)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   

@@ -127,6 +127,7 @@ export class SpotifyController {
 
       const shouldHideRestricted = hideRestricted === 'true';
       const allowExplicit = session?.allowExplicit ?? true;
+      const maxSongDuration = session?.maxSongDuration ?? null;
 
       const filteredTracks = shouldHideRestricted
         ? rawTracks.filter((track: any) => {
@@ -144,6 +145,14 @@ export class SpotifyController {
 
             if (artistIds.some((artistId: string) => bannedArtistIds.includes(artistId))) {
               return false;
+            }
+
+            // Filter by max song duration
+            if (maxSongDuration && track?.duration_ms) {
+              const trackDurationMinutes = track.duration_ms / 60000;
+              if (trackDurationMinutes > maxSongDuration) {
+                return false;
+              }
             }
 
             return true;

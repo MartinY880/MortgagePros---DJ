@@ -16,6 +16,7 @@ export interface Session {
   hostId: string;
   isActive: boolean;
   allowExplicit: boolean;
+  maxSongDuration?: number | null;
   createdAt: string;
   host: {
     id: string;

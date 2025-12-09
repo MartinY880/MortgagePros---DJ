@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react';
-import { guestApi, spotifyApi } from '../services/api';
+import { ArrowLeft, Copy, Check, Share2, Settings } from 'lucide-react';
+import { guestApi, sessionApi, spotifyApi } from '../services/api';
 import { socketService } from '../services/socket';
 import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, CreditState } from '../types';
 import QueueList from '../components/QueueList';
@@ -31,6 +31,9 @@ export default function SessionPage() {
   const [signInPrompted, setSignInPrompted] = useState(false);
   const [guestCredits, setGuestCredits] = useState<CreditState | null>(null);
   const [webPlayerReady, setWebPlayerReady] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsAllowExplicit, setSettingsAllowExplicit] = useState(true);
+  const [settingsMaxSongDuration, setSettingsMaxSongDuration] = useState<number | ''>('');
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { openSignIn } = useClerk();
 
@@ -73,6 +76,13 @@ export default function SessionPage() {
     { revalidateOnFocus: false }
   );
   const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
+
+  useEffect(() => {
+    if (session) {
+      setSettingsAllowExplicit(session.allowExplicit);
+      setSettingsMaxSongDuration(session.maxSongDuration ?? '');
+    }
+  }, [session]);
 
   useEffect(() => {
     if (participant?.type === 'guest') {
@@ -239,6 +249,31 @@ export default function SessionPage() {
         setLinkCopied(false);
         alert('Failed to copy invite link. Please copy it manually.');
       });
+  };
+
+  const handleUpdateSettings = async () => {
+    if (!session) return;
+
+    try {
+      await sessionApi.updateSettings(session.id, {
+        allowExplicit: settingsAllowExplicit,
+        ...(settingsMaxSongDuration !== '' && settingsMaxSongDuration > 0 
+          ? { maxSongDuration: Number(settingsMaxSongDuration) } 
+          : {}),
+      });
+      
+      // Refresh session data
+      const response = await sessionApi.getById(session.id);
+      if (response.data?.session) {
+        // Update local state
+        void mutateQueue();
+        setShowSettings(false);
+        alert('Settings updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      alert('Failed to update settings');
+    }
   };
 
   const handleRequireAccess = async () => {
@@ -494,6 +529,59 @@ export default function SessionPage() {
 
               <div className="space-y-6">
                 <ScheduledPlaybackManager sessionId={session.id} canManage />
+                
+                {/* Session Settings */}
+                <div className="bg-spotify-gray p-6 rounded-lg">
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="w-full flex items-center justify-between mb-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Settings size={24} className="text-spotify-green" />
+                      <h3 className="text-xl font-bold text-white">Session Settings</h3>
+                    </div>
+                    <span className="text-gray-400">{showSettings ? '▲' : '▼'}</span>
+                  </button>
+
+                  {showSettings && (
+                    <div className="space-y-4">
+                      <label className="flex items-center justify-between bg-spotify-black px-4 py-3 rounded-lg">
+                        <div>
+                          <p className="text-white font-semibold text-sm">Allow explicit songs</p>
+                          <p className="text-gray-400 text-xs">Guests can queue explicit tracks when enabled.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={settingsAllowExplicit}
+                          onChange={(e) => setSettingsAllowExplicit(e.target.checked)}
+                          className="h-5 w-5 accent-spotify-green"
+                        />
+                      </label>
+
+                      <label className="bg-spotify-black px-4 py-3 rounded-lg block">
+                        <div className="mb-2">
+                          <p className="text-white font-semibold text-sm">Max song length (minutes)</p>
+                          <p className="text-gray-400 text-xs">Leave empty for no limit. Current: {session.maxSongDuration ? `${session.maxSongDuration} min` : 'No limit'}</p>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="No limit"
+                          value={settingsMaxSongDuration}
+                          onChange={(e) => setSettingsMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full bg-spotify-gray text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        />
+                      </label>
+
+                      <button
+                        onClick={handleUpdateSettings}
+                        className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+                      >
+                        Save Settings
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-6">
