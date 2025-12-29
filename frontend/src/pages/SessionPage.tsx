@@ -22,6 +22,7 @@ export default function SessionPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [sessionInactiveError, setSessionInactiveError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [autoJoinStatus, setAutoJoinStatus] = useState<'idle' | 'pending' | 'error'>('idle');
@@ -106,8 +107,14 @@ export default function SessionPage() {
     } catch (error: any) {
       console.error('Guest join error:', error);
       const message = error?.response?.data?.error || 'Failed to join session. Please try again.';
-      setAutoJoinMessage(message);
-      setAutoJoinStatus('error');
+      
+      if (message.includes('no longer active')) {
+        setSessionInactiveError(message);
+        setAutoJoinStatus('idle');
+      } else {
+        setAutoJoinMessage(message);
+        setAutoJoinStatus('error');
+      }
       throw error;
     }
   }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback]);
@@ -152,7 +159,12 @@ export default function SessionPage() {
 
   useEffect(() => {
     if (sessionError?.response?.status === 404) {
-      navigate('/dashboard');
+      const errorMessage = sessionError?.response?.data?.error;
+      if (errorMessage && errorMessage.includes('no longer active')) {
+        setSessionInactiveError(errorMessage);
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [sessionError, navigate]);
 
@@ -456,6 +468,25 @@ export default function SessionPage() {
             {autoJoinMessage}
           </div>
         )}
+        {sessionInactiveError && (
+          <div className="mb-6 bg-yellow-900/40 border border-yellow-500/60 text-yellow-100 px-4 py-3 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Session No Longer Active</h3>
+                <p className="text-sm">{sessionInactiveError}</p>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="mt-3 bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Web Player - only for hosts */}
         {isHost && (
           <div className="mb-8">
@@ -654,6 +685,7 @@ export default function SessionPage() {
               onTrackAdded={handleTrackAdded}
               canSearch={participant?.type === 'host' || participant?.type === 'guest'}
               onRequireAccess={handleRequireAccess}
+              onSessionError={setSessionInactiveError}
             />
             <QueueList
               nextUp={queueState.nextUp}
@@ -663,6 +695,7 @@ export default function SessionPage() {
               onQueueUpdate={handleQueueUpdate}
               participant={participant}
               onRequireAccess={handleRequireAccess}
+              onSessionError={setSessionInactiveError}
             />
           </div>
 

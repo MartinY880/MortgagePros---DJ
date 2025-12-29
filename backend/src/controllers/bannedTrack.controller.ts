@@ -10,6 +10,12 @@ class BannedTrackController {
       return { error: 'Session not found or inactive' } as const;
     }
 
+    // Verify this session is the host's currently active session
+    const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+    if (!mostRecentSession || mostRecentSession.id !== sessionId) {
+      return { error: 'This session is no longer active. The host has started a new session.' } as const;
+    }
+
     if (req.session.userId !== session.hostId) {
       return { error: 'Only the host can manage banned tracks', status: 403 } as const;
     }

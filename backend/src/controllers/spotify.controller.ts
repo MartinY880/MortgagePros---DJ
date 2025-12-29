@@ -84,6 +84,12 @@ export class SpotifyController {
           return res.status(404).json({ error: 'Session not found' });
         }
 
+        // Verify this session is the host's currently active session
+        const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+        if (!mostRecentSession || mostRecentSession.id !== sessionId) {
+          return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
+        }
+
         const isHost = req.session.userId === session.hostId;
         const guestData = req.session.guestSessions?.[sessionId];
 
@@ -202,6 +208,12 @@ export class SpotifyController {
           return res.status(404).json({ error: 'Session not found' });
         }
 
+        // Verify this session is the host's currently active session
+        const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+        if (!mostRecentSession || mostRecentSession.id !== sessionId) {
+          return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
+        }
+
         const isHost = req.session.userId === session.hostId;
         const guestData = req.session.guestSessions?.[sessionId];
 
@@ -248,6 +260,12 @@ export class SpotifyController {
 
         if (!session || !session.isActive) {
           return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Verify this session is the host's currently active session
+        const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+        if (!mostRecentSession || mostRecentSession.id !== sessionId) {
+          return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
         }
 
         const isHost = req.session.userId === session.hostId;
@@ -348,6 +366,12 @@ export class SpotifyController {
 
       if (session.hostId !== userId) {
         return res.status(403).json({ error: 'Only the host can skip tracks' });
+      }
+
+      // Verify this session is the host's currently active session
+      const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+      if (!mostRecentSession || mostRecentSession.id !== sessionId) {
+        return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
       }
 
       playbackService.ensureMonitor(sessionId, session.hostId);

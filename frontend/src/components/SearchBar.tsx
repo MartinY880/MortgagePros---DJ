@@ -12,6 +12,7 @@ interface SearchBarProps {
   onTrackAdded: (result?: { credits?: CreditState }) => void;
   canSearch: boolean;
   onRequireAccess: () => void;
+  onSessionError?: (error: string) => void;
 }
 
 const PAGE_SIZE = 50;
@@ -30,7 +31,7 @@ type SearchResponse = {
   };
 };
 
-export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canSearch, onRequireAccess }: SearchBarProps) {
+export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canSearch, onRequireAccess, onSessionError }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -260,11 +261,19 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
     } catch (error: any) {
       console.error('Add track error:', error);
       const status = error?.response?.status;
+      const errorMessage = error?.response?.data?.error;
+      
+      if (status === 404 && errorMessage?.includes('no longer active')) {
+        onSessionError?.(errorMessage);
+        setShowResults(false);
+        return;
+      }
+      
       if (status === 401 || status === 403) {
         onRequireAccess();
         return;
       }
-      alert(error.response?.data?.error || 'Failed to add track');
+      alert(errorMessage || 'Failed to add track');
     }
   };
 

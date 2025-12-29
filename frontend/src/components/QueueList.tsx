@@ -10,9 +10,10 @@ interface QueueListProps {
   onQueueUpdate: (result?: { credits?: CreditState }) => void | Promise<void>;
   participant: SessionParticipant | null;
   onRequireAccess: () => void;
+  onSessionError?: (error: string) => void;
 }
 
-export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionId, sessionHostId, onQueueUpdate, participant, onRequireAccess }: QueueListProps) {
+export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionId, sessionHostId, onQueueUpdate, participant, onRequireAccess, onSessionError }: QueueListProps) {
   const canRemove = (item: QueueItem) => {
     if (!participant) return false;
     if (participant.type === 'host') return true;
@@ -43,6 +44,12 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
       console.error('Vote error:', error);
       const status = (error as any)?.response?.status;
       const message = (error as any)?.response?.data?.error;
+      
+      if (status === 404 && message?.includes('no longer active')) {
+        onSessionError?.(message);
+        return;
+      }
+      
       if (status === 403 && typeof message === 'string' && message.toLowerCase().includes('credit')) {
         alert(message);
         return;
@@ -67,6 +74,13 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
     } catch (error) {
       console.error('Remove error:', error);
       const status = (error as any)?.response?.status;
+      const message = (error as any)?.response?.data?.error;
+      
+      if (status === 404 && message?.includes('no longer active')) {
+        onSessionError?.(message);
+        return;
+      }
+      
       if (status === 401 || status === 403) {
         onRequireAccess();
         return;

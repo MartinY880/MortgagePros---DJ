@@ -79,6 +79,12 @@ export class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
+      // Verify this session is the host's currently active session
+      const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+      if (!mostRecentSession || mostRecentSession.id !== session.id) {
+        return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
+      }
+
       let credits: CreditState;
       try {
         credits = await creditService.ensureDailyCredits(clerkUserId);
@@ -126,6 +132,12 @@ export class SessionController {
 
       if (!session || !session.isActive) {
         return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Verify this session is the host's currently active session
+      const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
+      if (!mostRecentSession || mostRecentSession.id !== session.id) {
+        return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
       }
 
       let credits: CreditState;
