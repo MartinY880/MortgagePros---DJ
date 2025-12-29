@@ -56,11 +56,8 @@ export class AuthController {
       // Store user ID in session
       req.session.userId = user.id;
 
-  const needsDeviceSelection = !config.librespot.enabled && !(user as any).playbackDeviceId;
-  const redirectPath = needsDeviceSelection ? '/device-setup' : '/dashboard';
-
-  // Redirect to frontend
-  res.redirect(`${config.server.frontendUrl}${redirectPath}`);
+      // Redirect to frontend
+      res.redirect(`${config.server.frontendUrl}/dashboard`);
     } catch (error) {
       console.error('Callback error:', error);
       res.redirect(`${config.server.frontendUrl}?error=auth_failed`);

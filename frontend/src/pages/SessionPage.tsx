@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2, Settings } from 'lucide-react';
-import { guestApi, sessionApi, spotifyApi } from '../services/api';
+import { guestApi, sessionApi } from '../services/api';
 import { socketService } from '../services/socket';
 import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, CreditState } from '../types';
 import QueueList from '../components/QueueList';
@@ -9,8 +9,6 @@ import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
 import Leaderboard from '../components/Leaderboard';
-import WebPlayer from '../components/WebPlayer';
-import OutputDeviceSelector from '../components/OutputDeviceSelector';
 import PlaylistSelector from '../components/PlaylistSelector';
 import ScheduledPlaybackManager from '../components/ScheduledPlaybackManager';
 import BannedTracksManager from '../components/BannedTracksManager';
@@ -30,8 +28,9 @@ export default function SessionPage() {
   const [autoJoinMessage, setAutoJoinMessage] = useState<string | null>(null);
   const [signInPrompted, setSignInPrompted] = useState(false);
   const [guestCredits, setGuestCredits] = useState<CreditState | null>(null);
-  const [webPlayerReady, setWebPlayerReady] = useState(false);
+  const [showScheduled, setShowScheduled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBanned, setShowBanned] = useState(true);
   const [settingsAllowExplicit, setSettingsAllowExplicit] = useState(true);
   const [settingsMaxSongDuration, setSettingsMaxSongDuration] = useState<number | ''>('');
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
@@ -91,10 +90,6 @@ export default function SessionPage() {
       setGuestCredits(null);
     }
   }, [participant]);
-
-  useEffect(() => {
-    setWebPlayerReady(false);
-  }, [sessionId]);
 
   const executeJoin = useCallback(async () => {
     if (!sessionId) {
@@ -464,128 +459,149 @@ export default function SessionPage() {
         {/* Web Player - only for hosts */}
         {isHost && (
           <div className="mb-8">
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="space-y-4">
-                <WebPlayer 
-                  sessionId={session.id}
-                  onDeviceReady={async (deviceId) => {
-                    setWebPlayerReady(true);
-                    console.log('Web player device ready, evaluating auto-select:', deviceId);
-
-                    try {
-                      const response = await spotifyApi.listDevices();
-                      const {
-                        selectedDeviceId,
-                        librespotEnabled,
-                      } = response.data ?? {};
-
-                      if (librespotEnabled) {
-                        console.log('Managed playback active; skipping web player auto-selection.');
-                        return;
-                      }
-
-                      if (selectedDeviceId && selectedDeviceId !== deviceId) {
-                        console.log('A manual playback device is already selected; leaving it unchanged.');
-                        return;
-                      }
-
-                      if (selectedDeviceId === deviceId) {
-                        console.log('Web player is already the active device.');
-                        return;
-                      }
-
-                      // Auto-select the web player device only as a fallback when nothing else is selected
-                      let retries = 3;
-                      while (retries > 0) {
-                        try {
-                          await spotifyApi.selectDevice(deviceId);
-                          console.log('✅ Web player device auto-selected successfully');
-                          break;
-                        } catch (error: any) {
-                          retries--;
-                          console.warn(
-                            `Failed to auto-select web player device (${3 - retries}/3):`,
-                            error?.response?.data || error?.message
-                          );
-                          if (retries > 0) {
-                            await new Promise((resolve) => setTimeout(resolve, 2000));
-                          } else {
-                            console.error('❌ Failed to auto-select web player device after all retries');
-                          }
-                        }
-                      }
-                    } catch (error) {
-                      console.warn('Unable to determine playback device preference; skipping auto-select.', error);
-                    }
-                  }}
-                />
-                <OutputDeviceSelector 
-                  onDeviceSelected={(deviceId) => {
-                    console.log('Output device selected:', deviceId);
-                  }}
-                  webPlayerReady={webPlayerReady}
-                />
-              </div>
-
-              <div className="space-y-6">
-                <ScheduledPlaybackManager sessionId={session.id} canManage />
-                
-                {/* Session Settings */}
-                <div className="bg-spotify-gray p-6 rounded-lg">
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
                   <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    className="w-full flex items-center justify-between mb-4"
+                    onClick={() => setShowScheduled(!showScheduled)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <Settings size={24} className="text-spotify-green" />
-                      <h3 className="text-xl font-bold text-white">Session Settings</h3>
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400">
+                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                          <line x1="16" y1="2" x2="16" y2="6"></line>
+                          <line x1="8" y1="2" x2="8" y2="6"></line>
+                          <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-lg font-bold text-white">Scheduled Sets</h3>
+                        <p className="text-xs text-gray-400">Queue tracks at specific times</p>
+                      </div>
                     </div>
-                    <span className="text-gray-400">{showSettings ? '▲' : '▼'}</span>
+                    <div className={`transform transition-transform duration-200 ${showScheduled ? 'rotate-180' : ''}`}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </button>
+                  {showScheduled && (
+                    <div className="px-5 pb-5">
+                      <ScheduledPlaybackManager sessionId={session.id} canManage />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Session Settings */}
+                <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden mb-6">
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-spotify-green/20 rounded-lg">
+                        <Settings size={24} className="text-spotify-green" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-lg font-bold text-white">Session Settings</h3>
+                        <p className="text-xs text-gray-400">Configure session preferences</p>
+                      </div>
+                    </div>
+                    <div className={`transform transition-transform duration-200 ${showSettings ? 'rotate-180' : ''}`}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
                   </button>
 
                   {showSettings && (
-                    <div className="space-y-4">
-                      <label className="flex items-center justify-between bg-spotify-black px-4 py-3 rounded-lg">
-                        <div>
-                          <p className="text-white font-semibold text-sm">Allow explicit songs</p>
-                          <p className="text-gray-400 text-xs">Guests can queue explicit tracks when enabled.</p>
+                    <div className="p-5 pt-0 space-y-4 animate-in fade-in duration-200">
+                      <div className="h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-4" />
+                      
+                      <label className="flex items-center justify-between bg-spotify-black/50 px-5 py-4 rounded-lg border border-gray-800 hover:border-spotify-green/30 transition-colors cursor-pointer group">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xl">🔞</span>
+                            <p className="text-white font-semibold">Allow explicit songs</p>
+                          </div>
+                          <p className="text-gray-400 text-xs">Guests can queue explicit tracks when enabled</p>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={settingsAllowExplicit}
-                          onChange={(e) => setSettingsAllowExplicit(e.target.checked)}
-                          className="h-5 w-5 accent-spotify-green"
-                        />
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={settingsAllowExplicit}
+                            onChange={(e) => setSettingsAllowExplicit(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-700 peer-focus:ring-2 peer-focus:ring-spotify-green rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-spotify-green"></div>
+                        </div>
                       </label>
 
-                      <label className="bg-spotify-black px-4 py-3 rounded-lg block">
-                        <div className="mb-2">
-                          <p className="text-white font-semibold text-sm">Max song length (minutes)</p>
-                          <p className="text-gray-400 text-xs">Leave empty for no limit. Current: {session.maxSongDuration ? `${session.maxSongDuration} min` : 'No limit'}</p>
+                      <label className="bg-spotify-black/50 px-5 py-4 rounded-lg border border-gray-800 hover:border-spotify-green/30 transition-colors block group">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-xl">⏱️</span>
+                          <div>
+                            <p className="text-white font-semibold">Max song length</p>
+                            <p className="text-gray-400 text-xs">
+                              Current: {session.maxSongDuration ? (
+                                <span className="text-spotify-green font-medium">{session.maxSongDuration} min</span>
+                              ) : (
+                                <span className="text-yellow-400 font-medium">No limit</span>
+                              )}
+                            </p>
+                          </div>
                         </div>
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="No limit"
-                          value={settingsMaxSongDuration}
-                          onChange={(e) => setSettingsMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                          className="w-full bg-spotify-gray text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                        />
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="No limit"
+                            value={settingsMaxSongDuration}
+                            onChange={(e) => setSettingsMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="flex-1 bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
+                          />
+                          <span className="text-gray-400 text-sm font-medium">minutes</span>
+                        </div>
                       </label>
 
                       <button
                         onClick={handleUpdateSettings}
-                        className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+                        className="w-full bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 text-white font-bold py-3.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-spotify-green/20"
                       >
-                        Save Settings
+                        💾 Save Settings
                       </button>
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div className="space-y-6">
-                <BannedTracksManager sessionId={session.id} />
+              <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+                <button
+                  onClick={() => setShowBanned(!showBanned)}
+                  className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-500/20 rounded-lg">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-400">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-lg font-bold text-white">Banned Tracks & Artists</h3>
+                      <p className="text-xs text-gray-400">Manage blocked content</p>
+                    </div>
+                  </div>
+                  <div className={`transform transition-transform duration-200 ${showBanned ? 'rotate-180' : ''}`}>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </button>
+                {showBanned && (
+                  <div className="px-5 pb-5">
+                    <BannedTracksManager sessionId={session.id} />
+                  </div>
+                )}
               </div>
             </div>
 

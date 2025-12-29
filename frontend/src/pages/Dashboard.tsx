@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, LogOut, Plus, Users } from 'lucide-react';
+import { LogOut, Plus, Users } from 'lucide-react';
 import { authApi, sessionApi } from '../services/api';
 import { User, Session } from '../types';
 import { useApiSWR } from '../hooks/useApiSWR';
@@ -45,12 +45,6 @@ export default function Dashboard() {
     if (!sessionName.trim()) return;
     
     try {
-      if (!user?.playbackDeviceId) {
-        alert('Select a Spotify playback device before starting a session.');
-        navigate('/device-setup');
-        return;
-      }
-
       const response = await sessionApi.create({
         name: sessionName.trim(),
         allowExplicit,
@@ -95,12 +89,6 @@ export default function Dashboard() {
     setResumeError(null);
 
     try {
-      if (!user?.playbackDeviceId) {
-        setResuming(false);
-        navigate('/device-setup');
-        return;
-      }
-
       const response = await sessionApi.reopen(recentSession.id);
       const session: Session = response.data.session;
       void mutateRecent();
@@ -158,8 +146,6 @@ export default function Dashboard() {
     return null;
   }
 
-  const hasPlaybackDevice = Boolean(user.playbackDeviceId);
-
   return (
     <div className="min-h-screen bg-spotify-dark">
       <header className="bg-spotify-black border-b border-spotify-gray p-4">
@@ -179,24 +165,6 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto p-8">
-        {!hasPlaybackDevice && (
-          <div className="bg-yellow-500/10 border border-yellow-500/60 text-yellow-100 rounded-lg p-4 mb-8 flex items-start gap-3">
-            <AlertTriangle className="mt-0.5" />
-            <div>
-              <p className="font-semibold text-yellow-100">Choose a playback device to start hosting.</p>
-              <p className="text-sm text-yellow-50/80 mt-1">
-                MTGPros DJ needs to know which Spotify device should receive audio. Pick one now so queued songs start playing automatically.
-              </p>
-              <button
-                onClick={() => navigate('/device-setup')}
-                className="mt-3 inline-flex items-center bg-yellow-500 hover:bg-yellow-400 text-black font-semibold px-4 py-2 rounded-full transition"
-              >
-                Select playback device
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="grid md:grid-cols-2 gap-8">
           {/* Create Session */}
           <div className="bg-spotify-gray p-8 rounded-lg">

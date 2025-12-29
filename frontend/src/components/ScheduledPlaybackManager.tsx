@@ -221,14 +221,17 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
   );
 
   return (
-    <div className="bg-spotify-gray p-6 rounded-lg space-y-6">
-      <div className="flex items-center gap-3">
-        <Calendar className="text-spotify-green" />
-        <div>
-          <h3 className="text-xl font-bold text-white">Scheduled Sets</h3>
-          <p className="text-sm text-gray-400">Queue a special block of tracks for a specific time.</p>
+    <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/20 rounded-lg">
+            <Calendar size={24} className="text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Scheduled Sets</h3>
+            <p className="text-xs text-gray-400">Queue a special block of tracks for a specific time</p>
+          </div>
         </div>
-      </div>
 
       {error && (
         <div className="bg-red-900/40 border border-red-500/60 text-red-100 px-4 py-3 rounded-lg text-sm">
@@ -243,20 +246,29 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
       )}
 
       {canManage && (
-        <div className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg p-4 space-y-4">
+        <div className="bg-spotify-black/50 border border-gray-800 rounded-lg p-5 space-y-4 hover:border-spotify-green/30 transition-colors">
           <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2">Daily start time</label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
+              <Clock size={16} className="text-spotify-green" />
+              Daily start time
+            </label>
             <input
               type="time"
               value={scheduledTime}
               onChange={(event) => setScheduledTime(event.target.value)}
-              className="w-full bg-spotify-black text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              className="w-full bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700"
             />
-            <p className="text-xs text-gray-500 mt-1">Runs every day at the selected time in your timezone.</p>
+            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+              <span className="text-blue-400">ℹ️</span>
+              Runs every day at the selected time in your timezone
+            </p>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-300">Add tracks</label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Search size={16} className="text-spotify-green" />
+              Add tracks
+            </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -264,7 +276,7 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
                 value={searchTerm}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value)}
                 placeholder="Search Spotify…"
-                className="w-full bg-spotify-black text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                className="w-full bg-spotify-gray text-white pl-10 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
                 onFocus={() => {
                   if (searchTerm.trim()) {
                     setShowSearchResults(true);
@@ -363,10 +375,9 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting || selectedTracks.length === 0 || !scheduledTime}
-            className="w-full bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2"
-          >
+            className="w-full bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-spotify-green/20 disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
             {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Clock size={20} />}
-            <span>{isSubmitting ? 'Scheduling…' : 'Schedule Tracks'}</span>
+            <span>{isSubmitting ? 'Scheduling…' : '📅 Schedule Tracks'}</span>
           </button>
         </div>
       )}
@@ -416,6 +427,7 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
         )}
       </div>
 
+      </div>
     </div>
   );
 }

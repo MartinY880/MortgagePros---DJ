@@ -364,40 +364,6 @@ export class SpotifyController {
       res.status(500).json({ error: 'Failed to skip to next' });
     }
   }
-
-  async listDevices(req: Request, res: Response) {
-    try {
-      const userId = req.session.userId!;
-      const accessToken = await spotifyService.ensureValidToken(userId);
-      const result = await playbackTargetService.listDevices(userId, accessToken);
-      res.json(result);
-    } catch (error: any) {
-      console.error('List devices error:', error);
-      res.status(500).json({ error: error?.message || 'Failed to list devices' });
-    }
-  }
-
-  async selectDevice(req: Request, res: Response) {
-    try {
-      const userId = req.session.userId!;
-      const { deviceId } = req.body ?? {};
-      const accessToken = await spotifyService.ensureValidToken(userId);
-
-      let device = null;
-
-      try {
-        device = await playbackTargetService.selectDevice(userId, accessToken, deviceId ?? null);
-      } catch (error: any) {
-        console.error('Select device error:', error);
-        return res.status(400).json({ error: error?.message || 'Failed to select device' });
-      }
-
-      res.json({ device });
-    } catch (error) {
-      console.error('Select device error:', error);
-      res.status(500).json({ error: 'Failed to select device' });
-    }
-  }
 }
 
 export const spotifyController = new SpotifyController();

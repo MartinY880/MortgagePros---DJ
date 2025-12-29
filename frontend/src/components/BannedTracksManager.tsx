@@ -264,14 +264,17 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
   };
 
   return (
-    <div className="bg-spotify-gray p-6 rounded-lg space-y-5">
-      <div className="flex items-center gap-3">
-        <Lock className="text-spotify-green" />
-        <div>
-          <h3 className="text-xl font-bold text-white">Banned Tracks & Artists</h3>
-          <p className="text-sm text-gray-400">Keep unwanted songs or artists out of any session you host by managing reusable ban lists.</p>
+    <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+      <div className="p-6 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-red-500/20 rounded-lg">
+            <Lock size={24} className="text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Banned Tracks & Artists</h3>
+            <p className="text-xs text-gray-400">Keep unwanted songs or artists out of any session you host</p>
+          </div>
         </div>
-      </div>
 
       {error && (
         <div className="bg-red-900/40 border border-red-500/60 text-red-100 px-4 py-3 rounded-lg text-sm">
@@ -285,10 +288,12 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
         </div>
       )}
 
-      <form onSubmit={handleCreateList} className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg p-4 space-y-3">
+      <form onSubmit={handleCreateList} className="bg-spotify-black/50 border border-gray-800 rounded-lg p-5 space-y-3 hover:border-spotify-green/30 transition-colors">
         <div className="flex items-center gap-2">
-          <ListPlus className="text-gray-300" size={18} />
-          <span className="text-sm font-semibold text-gray-200">Create new ban list</span>
+          <div className="p-1.5 bg-spotify-green/20 rounded">
+            <ListPlus className="text-spotify-green" size={18} />
+          </div>
+          <span className="text-sm font-semibold text-white">Create new ban list</span>
         </div>
         <div className="flex gap-2">
           <input
@@ -296,13 +301,12 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
             placeholder="List name"
             value={createListName}
             onChange={(event: ChangeEvent<HTMLInputElement>) => setCreateListName(event.target.value)}
-            className="flex-1 bg-spotify-black text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+            className="flex-1 bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
           />
           <button
             type="submit"
             disabled={creatingList}
-            className="bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-2"
-          >
+            className="bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white px-4 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all shadow-lg shadow-spotify-green/20 disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
             {creatingList ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
             <span>{creatingList ? 'Creating…' : 'Add List'}</span>
           </button>
@@ -567,6 +571,7 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
             </ul>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

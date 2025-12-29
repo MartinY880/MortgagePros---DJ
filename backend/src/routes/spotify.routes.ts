@@ -14,7 +14,5 @@ router.get('/playback', requireClerkAuth, optionalAuth, spotifyController.getCur
 router.post('/play', requireClerkAuth, requireAuth, spotifyController.play);
 router.post('/pause', requireClerkAuth, requireAuth, spotifyController.pause);
 router.post('/next', requireClerkAuth, requireAuth, spotifyController.next);
-router.get('/devices', requireClerkAuth, requireAuth, spotifyController.listDevices);
-router.post('/devices/select', requireClerkAuth, requireAuth, spotifyController.selectDevice);
 
 export default router;
