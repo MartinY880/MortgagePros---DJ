@@ -3,7 +3,6 @@ import { spotifyService } from '../services/spotify.service';
 import { sessionService } from '../services/session.service';
 import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
 import { queueService } from '../services/queue.service';
-import { playbackTargetService } from '../services/playbackTarget.service';
 import { bannedTracksService } from '../services/bannedTracks.service';
 
 export class SpotifyController {
@@ -51,12 +50,10 @@ export class SpotifyController {
       }
 
       const accessToken = await spotifyService.ensureValidToken(userId);
-      const preference = await playbackTargetService.getPreference(userId);
       
       await spotifyService.startPlaylist(
-        playlistUri, 
-        accessToken, 
-        preference.playbackDeviceId || undefined
+        playlistUri,
+        accessToken
       );
 
       res.json({ message: 'Playlist started' });
@@ -306,10 +303,12 @@ export class SpotifyController {
         }
       }
 
-      res.json({ playback, requester });
+      // Return playback state (may be null if no active playback)
+      res.json({ playback: playback || null, requester });
     } catch (error) {
       console.error('Get playback error:', error);
-      res.status(500).json({ error: 'Failed to get playback state' });
+      // Return null playback instead of error to prevent "unavailable" message
+      res.json({ playback: null, requester: null });
     }
   }
 
@@ -317,16 +316,8 @@ export class SpotifyController {
     try {
       const userId = req.session.userId!;
       const accessToken = await spotifyService.ensureValidToken(userId);
-      const preference = await playbackTargetService.getPreference(userId);
 
-      const playbackStarted = await playbackTargetService.transferPlayback(userId, accessToken, true);
-      if (!playbackStarted && preference.playbackDeviceId) {
-        console.warn('Preferred playback device transfer failed during play request, falling back to direct play.');
-      }
-
-      if (!playbackStarted) {
-        await spotifyService.play(accessToken, preference.playbackDeviceId || undefined);
-      }
+      await spotifyService.play(accessToken);
 
       res.json({ message: 'Playing' });
     } catch (error) {
@@ -339,8 +330,7 @@ export class SpotifyController {
     try {
       const userId = req.session.userId!;
       const accessToken = await spotifyService.ensureValidToken(userId);
-      const preference = await playbackTargetService.getPreference(userId);
-      await spotifyService.pause(accessToken, preference.playbackDeviceId || undefined);
+      await spotifyService.pause(accessToken);
 
       res.json({ message: 'Paused' });
     } catch (error) {
@@ -377,9 +367,7 @@ export class SpotifyController {
       playbackService.ensureMonitor(sessionId, session.hostId);
 
       const accessToken = await spotifyService.ensureValidToken(userId);
-      const preference = await playbackTargetService.getPreference(userId);
-      await playbackTargetService.transferPlayback(userId, accessToken, true);
-      await spotifyService.skipToNext(accessToken, preference.playbackDeviceId || undefined);
+      await spotifyService.skipToNext(accessToken);
       playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
 
       res.json({ message: 'Skipped to next' });

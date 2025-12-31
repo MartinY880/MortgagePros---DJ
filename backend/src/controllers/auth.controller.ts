@@ -78,9 +78,6 @@ export class AuthController {
           displayName: true,
           email: true,
           createdAt: true,
-          playbackDeviceId: true,
-          playbackDeviceName: true,
-          playbackDeviceType: true,
         },
       });
 

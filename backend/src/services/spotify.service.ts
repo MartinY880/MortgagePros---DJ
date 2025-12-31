@@ -90,107 +90,64 @@ export class SpotifyService {
     return data.body;
   }
 
-  async addToQueue(trackUri: string, accessToken: string, deviceId?: string | null) {
+  async addToQueue(trackUri: string, accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    const options = deviceId ? { device_id: deviceId } : undefined;
-    await this.spotifyApi.addToQueue(trackUri, options);
+    await this.spotifyApi.addToQueue(trackUri);
   }
 
   async getCurrentPlayback(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    const data = await this.spotifyApi.getMyCurrentPlaybackState();
-    return data.body;
-  }
+    try {
+      const data = await this.spotifyApi.getMyCurrentPlaybackState();
+      return data.body;
+    } catch (error: any) {
+      // If there's no active playback, Spotify returns 204 No Content
+      const statusCode = error?.statusCode || error?.response?.status || error?.status;
+      if (statusCode === 204) {
+        console.log('No active playback (204 No Content)');
+        return null;
+      }
 
-  async getAvailableDevices(accessToken: string) {
-    this.spotifyApi.setAccessToken(accessToken);
-    const data = await this.spotifyApi.getMyDevices();
-    return data.body.devices || [];
-  }
+      if (statusCode === 429) {
+        const retryAfterHeader = error?.headers?.['retry-after']
+          ?? error?.response?.headers?.['retry-after']
+          ?? error?.body?.retry_after;
+        const retryAfterSeconds = Number.parseInt(`${retryAfterHeader ?? ''}`, 10);
 
-  async transferPlayback(deviceId: string, accessToken: string, play = false) {
-    this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.transferMyPlayback({
-      deviceIds: [deviceId],
-      play,
-    });
-  }
-
-  async playUris(accessToken: string, uris: string[], deviceId?: string | null, options?: { positionMs?: number }) {
-    this.spotifyApi.setAccessToken(accessToken);
-    const payload: Record<string, unknown> = {
-      uris,
-    };
-
-    if (deviceId) {
-      payload.device_id = deviceId;
-    }
-
-    if (typeof options?.positionMs === 'number') {
-      payload.position_ms = options.positionMs;
-    }
-
-    await this.spotifyApi.play(payload);
-  }
-
-  async play(accessToken: string, deviceId?: string) {
-    this.spotifyApi.setAccessToken(accessToken);
-    if (deviceId) {
-      await this.spotifyApi.play({ device_id: deviceId });
-    } else {
-      await this.spotifyApi.play();
+        const rateLimitError = new Error('Spotify rate limit');
+        (rateLimitError as any).statusCode = 429;
+        if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+          (rateLimitError as any).retryAfter = retryAfterSeconds;
+        }
+        (rateLimitError as any).headers = error?.headers ?? error?.response?.headers ?? {};
+        throw rateLimitError;
+      }
+      
+      // Log the error for debugging but return null instead of throwing
+      console.error('Failed to get current playback state:', {
+        statusCode,
+        message: error?.message,
+        errorBody: error?.body,
+      });
+      
+      // Return null to indicate no playback data available
+      return null;
     }
   }
 
-  async playContext(
-    accessToken: string,
-    options: {
-      deviceId?: string | null;
-      contextUri: string;
-      offsetUri?: string;
-      offsetPosition?: number;
-      positionMs?: number;
-    }
-  ) {
+  async play(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-
-    const payload: Record<string, unknown> = {
-      context_uri: options.contextUri,
-    };
-
-    if (options.deviceId) {
-      payload.device_id = options.deviceId;
-    }
-
-    if (options.offsetUri) {
-      payload.offset = { uri: options.offsetUri };
-    } else if (typeof options.offsetPosition === 'number') {
-      payload.offset = { position: options.offsetPosition };
-    }
-
-    if (typeof options.positionMs === 'number') {
-      payload.position_ms = options.positionMs;
-    }
-
-    await this.spotifyApi.play(payload);
+    await this.spotifyApi.play();
   }
 
-  async pause(accessToken: string, deviceId?: string) {
+  async pause(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    if (deviceId) {
-      await this.spotifyApi.pause({ device_id: deviceId });
-    } else {
-      await this.spotifyApi.pause();
-    }
+    await this.spotifyApi.pause();
   }
 
-  async skipToNext(accessToken: string, deviceId?: string) {
+  async skipToNext(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    if (deviceId) {
-      await this.spotifyApi.skipToNext({ device_id: deviceId });
-    } else {
-      await this.spotifyApi.skipToNext();
-    }
+    await this.spotifyApi.skipToNext();
   }
 
   async getUserPlaylists(accessToken: string, limit = 50) {
@@ -205,13 +162,9 @@ export class SpotifyService {
     return data.body.items || [];
   }
 
-  async startPlaylist(playlistUri: string, accessToken: string, deviceId?: string) {
+  async startPlaylist(playlistUri: string, accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
-    const options: any = { context_uri: playlistUri };
-    if (deviceId) {
-      options.device_id = deviceId;
-    }
-    await this.spotifyApi.play(options);
+    await this.spotifyApi.play({ context_uri: playlistUri });
   }
 
   async ensureValidToken(userId: string): Promise<string> {

@@ -4,9 +4,6 @@ export interface User {
   displayName: string;
   email?: string;
   createdAt: string;
-  playbackDeviceId?: string | null;
-  playbackDeviceName?: string | null;
-  playbackDeviceType?: string | null;
 }
 
 export interface Session {
@@ -135,23 +132,6 @@ export interface PlaybackState {
 export interface PlaybackRequester {
   type: 'host' | 'guest' | 'unknown';
   name: string;
-}
-
-export interface SpotifyDeviceInfo {
-  id: string;
-  name: string;
-  type: string;
-  is_active: boolean;
-  is_private_session?: boolean;
-  is_restricted?: boolean;
-  volume_percent?: number | null;
-}
-
-export interface ManagedPlaybackInfo {
-  enabled: boolean;
-  strategy: 'manual' | 'librespot' | 'static';
-  deviceId?: string | null;
-  deviceName?: string | null;
 }
 
 export interface LeaderboardEntry {

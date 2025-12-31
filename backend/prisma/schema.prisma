@@ -19,10 +19,6 @@ model User {
   accessToken   String
   refreshToken  String
   tokenExpiry   DateTime
-  playbackDeviceId      String?
-  playbackDeviceName    String?
-  playbackDeviceType    String?
-  playbackDeviceLastSeen DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastActiveSessionId String?
