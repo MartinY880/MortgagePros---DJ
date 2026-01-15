@@ -94,28 +94,57 @@ class CreditService {
       const user = await clerkClient.users.getUser(userId);
       let metadata = { ...(user.privateMetadata ?? {}) } as Record<string, unknown>;
 
-      let total = this.parseNumber(metadata[CREDIT_TOTAL_KEY], GUEST_DAILY_CREDIT_LIMIT);
-      if (total <= 0) {
-        total = GUEST_DAILY_CREDIT_LIMIT;
+      const rawTotalValue = Number(metadata[CREDIT_TOTAL_KEY]);
+      const creditsDisabled = Number.isFinite(rawTotalValue) && Math.floor(rawTotalValue) === -1;
+
+      let changed = false;
+
+      let total = creditsDisabled
+        ? -1
+        : this.parseNumber(metadata[CREDIT_TOTAL_KEY], GUEST_DAILY_CREDIT_LIMIT);
+
+      if (!creditsDisabled) {
+        if (total <= 0 || total < GUEST_DAILY_CREDIT_LIMIT) {
+          total = GUEST_DAILY_CREDIT_LIMIT;
+          changed = true;
+        }
       }
 
-      let current = this.parseNumber(metadata[CREDIT_CURRENT_KEY], total);
+      let current = creditsDisabled
+        ? 0
+        : this.parseNumber(metadata[CREDIT_CURRENT_KEY], total);
       let refreshDate = typeof metadata[CREDIT_REFRESH_KEY] === 'string'
         ? (metadata[CREDIT_REFRESH_KEY] as string)
         : '';
 
       const today = this.todayDateString();
-      let changed = false;
 
-      if (!refreshDate || this.isBefore(refreshDate, today)) {
-        current = total;
-        refreshDate = today;
-        changed = true;
-      }
+      if (creditsDisabled) {
+        if (current !== 0) {
+          current = 0;
+          changed = true;
+        }
 
-      if (current > total) {
-        current = total;
-        changed = true;
+        if (!refreshDate || refreshDate !== today) {
+          refreshDate = today;
+          changed = true;
+        }
+      } else {
+        if (!refreshDate || this.isBefore(refreshDate, today)) {
+          current = total;
+          refreshDate = today;
+          changed = true;
+        }
+
+        if (current > total) {
+          current = total;
+          changed = true;
+        }
+
+        if (current < 0) {
+          current = 0;
+          changed = true;
+        }
       }
 
       if (changed || metadata[CREDIT_TOTAL_KEY] === undefined || metadata[CREDIT_CURRENT_KEY] === undefined || metadata[CREDIT_REFRESH_KEY] === undefined) {
@@ -192,7 +221,11 @@ class CreditService {
       throw new CreditError('Credit amount must be greater than zero');
     }
 
-  const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
+    const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
+
+    if (state.totalCredits === -1) {
+      throw new CreditError('Credits are disabled for this user.', 403);
+    }
 
     if (state.currentCredits < spendAmount) {
       throw new CreditError('Not enough credits remaining to add this track. Credits refresh daily.', 403);
@@ -226,7 +259,11 @@ class CreditService {
       throw new CreditError('Credit amount must be greater than zero');
     }
 
-  const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
+    const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
+
+    if (state.totalCredits === -1) {
+      throw new CreditError('Credits are disabled for this user.', 403);
+    }
     const nextTotal = options?.increaseTotal ? state.totalCredits + addAmount : state.totalCredits;
     const nextCurrent = Math.min(nextTotal, state.currentCredits + addAmount);
 
@@ -253,17 +290,36 @@ class CreditService {
   }
 
   async setTotalCredits(userId: string, total: number, options?: { refill?: boolean }): Promise<CreditState> {
-    const normalizedTotal = Math.floor(total);
-    if (!Number.isFinite(normalizedTotal) || normalizedTotal <= 0) {
+    const requestedTotal = Math.floor(total);
+    if (!Number.isFinite(requestedTotal)) {
       throw new CreditError('Total credits must be greater than zero');
     }
 
-  const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
+    const normalizedTotal = requestedTotal === -1
+      ? -1
+      : requestedTotal <= 0
+        ? GUEST_DAILY_CREDIT_LIMIT
+        : Math.max(requestedTotal, GUEST_DAILY_CREDIT_LIMIT);
+
+    if (normalizedTotal === 0) {
+      throw new CreditError('Total credits must be greater than zero');
+    }
+
+    const { state, metadata } = await this.loadAndNormalize(userId, { force: true });
     const refill = options?.refill ?? true;
     const today = this.todayDateString();
 
-    const nextCurrent = refill ? normalizedTotal : Math.min(state.currentCredits, normalizedTotal);
-    const nextRefresh = refill ? today : state.refreshDate;
+    const nextCurrent = normalizedTotal === -1
+      ? 0
+      : refill
+        ? normalizedTotal
+        : Math.min(state.currentCredits, normalizedTotal);
+
+    const nextRefresh = normalizedTotal === -1
+      ? today
+      : refill
+        ? today
+        : state.refreshDate;
 
     const updatedMetadata = {
       ...metadata,
