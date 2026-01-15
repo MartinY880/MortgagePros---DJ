@@ -134,6 +134,14 @@ export interface PlaybackRequester {
   name: string;
 }
 
+export interface SkipState {
+  trackId: string | null;
+  skipCount: number;
+  threshold: number;
+  triggered?: boolean;
+  previousTrackId?: string | null;
+}
+
 export interface LeaderboardEntry {
   id: string;
   fullName: string;

@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { QueueState, PlaybackState, PlaybackRequester } from '../types';
+import { QueueState, PlaybackState, PlaybackRequester, SkipState } from '../types';
 import { getSocketUrl } from './api';
 
 class SocketService {
@@ -53,7 +53,7 @@ class SocketService {
     return () => this.socket?.off('vote_updated', callback);
   }
 
-  onNowPlaying(callback: (data: { playback: PlaybackState | null; requester?: PlaybackRequester | null }) => void) {
+  onNowPlaying(callback: (data: { playback: PlaybackState | null; requester?: PlaybackRequester | null; skip?: SkipState | null }) => void) {
     if (!this.socket) return () => undefined;
 
     this.socket.on('now_playing', callback);

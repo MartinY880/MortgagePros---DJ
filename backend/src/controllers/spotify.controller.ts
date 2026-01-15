@@ -4,6 +4,8 @@ import { sessionService } from '../services/session.service';
 import { playbackService, PLAYBACK_SKIP_POLL_DELAY_MS } from '../services/playback.service';
 import { queueService } from '../services/queue.service';
 import { bannedTracksService } from '../services/bannedTracks.service';
+import { creditService, CreditError, CreditState, VOTE_REACTION_COST } from '../services/credit.service';
+import { skipCounterService } from '../services/skipCounter.service';
 
 export class SpotifyController {
   async getPlaybackToken(req: Request, res: Response) {
@@ -303,8 +305,18 @@ export class SpotifyController {
         }
       }
 
+      let skipState: Awaited<ReturnType<typeof skipCounterService.syncCurrentTrack>> | null = null;
+
+      if (resolvedSessionId) {
+        try {
+          skipState = await skipCounterService.syncCurrentTrack(resolvedSessionId, playback?.item?.id ?? null);
+        } catch (skipError) {
+          console.error('Skip counter sync error:', skipError);
+        }
+      }
+
       // Return playback state (may be null if no active playback)
-      res.json({ playback: playback || null, requester });
+      res.json({ playback: playback || null, requester, skip: skipState });
     } catch (error) {
       console.error('Get playback error:', error);
       // Return null playback instead of error to prevent "unavailable" message
@@ -340,9 +352,10 @@ export class SpotifyController {
   }
 
   async next(req: Request, res: Response) {
+    let spentSkipCredits: { amount: number; clerkUserId: string } | null = null;
+
     try {
       const { sessionId } = req.body;
-      const userId = req.session.userId!;
 
       if (!sessionId || typeof sessionId !== 'string') {
         return res.status(400).json({ error: 'sessionId is required to skip tracks' });
@@ -354,25 +367,181 @@ export class SpotifyController {
         return res.status(404).json({ error: 'Session not found or inactive' });
       }
 
-      if (session.hostId !== userId) {
-        return res.status(403).json({ error: 'Only the host can skip tracks' });
-      }
-
-      // Verify this session is the host's currently active session
       const mostRecentSession = await sessionService.getMostRecentSession(session.hostId);
       if (!mostRecentSession || mostRecentSession.id !== sessionId) {
         return res.status(404).json({ error: 'This session is no longer active. The host has started a new session.' });
       }
 
+      const isHost = req.session.userId === session.hostId;
+      let clerkUserId: string | null = null;
+      let actorCredits: CreditState | null = null;
+
       playbackService.ensureMonitor(sessionId, session.hostId);
 
-      const accessToken = await spotifyService.ensureValidToken(userId);
-      await spotifyService.skipToNext(accessToken);
-      playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
+      const accessToken = await spotifyService.ensureValidToken(session.hostId);
+      const playback = await spotifyService.getCurrentPlayback(accessToken);
 
-      res.json({ message: 'Skipped to next' });
+      if (!playback?.item?.id) {
+        return res.status(409).json({ error: 'No active track to skip' });
+      }
+
+      const currentTrackId = playback.item.id;
+
+      if (isHost) {
+        await spotifyService.skipToNext(accessToken);
+        const resetResult = await skipCounterService.reset(sessionId);
+        playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
+
+        return res.json({
+          message: 'Skipped to next',
+          skip: {
+            ...resetResult.state,
+            triggered: true,
+            previousTrackId: currentTrackId,
+          },
+        });
+      }
+
+      const guestSession = req.session.guestSessions?.[sessionId];
+
+      if (!guestSession) {
+        return res.status(401).json({ error: 'Join the session before skipping tracks' });
+      }
+
+      const guest = await sessionService.getGuestById(guestSession.guestId);
+
+      if (!guest || guest.sessionId !== sessionId) {
+        if (req.session.guestSessions) {
+          delete req.session.guestSessions[sessionId];
+        }
+        return res.status(401).json({ error: 'Join the session before skipping tracks' });
+      }
+
+      await skipCounterService.syncCurrentTrack(sessionId, currentTrackId);
+
+      const alreadyVoted = await skipCounterService.hasGuestVoted(sessionId, currentTrackId, guest.id);
+
+      if (alreadyVoted) {
+        const currentState = await skipCounterService.getState(sessionId);
+        return res.status(409).json({
+          error: 'You have already voted to skip this track',
+          skip: {
+            ...currentState,
+            triggered: false,
+            previousTrackId: null,
+          },
+        });
+      }
+
+      clerkUserId = req.auth?.userId ?? guest.clerkUserId ?? null;
+
+      if (!clerkUserId) {
+        return res.status(401).json({ error: 'Sign in with Clerk to spend credits on skip votes' });
+      }
+
+      try {
+        const credits = await creditService.spendCredits(clerkUserId, VOTE_REACTION_COST);
+        spentSkipCredits = { amount: VOTE_REACTION_COST, clerkUserId };
+
+        if (clerkUserId === req.auth?.userId) {
+          actorCredits = credits;
+        }
+      } catch (error) {
+        if (error instanceof CreditError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        throw error;
+      }
+
+      const voteResult = await skipCounterService.addVote(sessionId, currentTrackId, guest.id);
+
+      if (voteResult.alreadyVoted) {
+        const credits = await creditService.addCredits(clerkUserId, VOTE_REACTION_COST);
+        spentSkipCredits = null;
+
+        if (clerkUserId === req.auth?.userId) {
+          actorCredits = credits;
+        }
+
+        const conflictPayload: Record<string, unknown> = {
+          error: 'You have already voted to skip this track',
+          skip: {
+            ...voteResult.state,
+            triggered: false,
+            previousTrackId: null,
+          },
+        };
+
+        if (actorCredits) {
+          conflictPayload.credits = actorCredits;
+        }
+
+        return res.status(409).json(conflictPayload);
+      }
+
+      const thresholdReached = voteResult.state.skipCount >= skipCounterService.getThreshold();
+
+      if (thresholdReached) {
+        try {
+          await spotifyService.skipToNext(accessToken);
+          const resetResult = await skipCounterService.reset(sessionId);
+          playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
+          spentSkipCredits = null;
+
+          const triggeredPayload: Record<string, unknown> = {
+            message: 'Skip threshold reached. Track skipped.',
+            skip: {
+              ...resetResult.state,
+              triggered: true,
+              previousTrackId: currentTrackId,
+            },
+          };
+
+          if (actorCredits) {
+            triggeredPayload.credits = actorCredits;
+          }
+
+          return res.json(triggeredPayload);
+        } catch (spotifyError) {
+          await skipCounterService.removeVote(sessionId, currentTrackId, guest.id);
+          throw spotifyError;
+        }
+      }
+
+      spentSkipCredits = null;
+      playbackService.requestImmediateSync(sessionId);
+
+      const payload: Record<string, unknown> = {
+        message: 'Skip vote recorded',
+        skip: {
+          ...voteResult.state,
+          triggered: false,
+          previousTrackId: null,
+        },
+      };
+
+      if (actorCredits) {
+        payload.credits = actorCredits;
+      }
+
+      return res.json(payload);
     } catch (error) {
       console.error('Next error:', error);
+
+      if (spentSkipCredits) {
+        const { clerkUserId: refundUserId, amount } = spentSkipCredits;
+        try {
+          await creditService.addCredits(refundUserId, amount);
+        } catch (refundError) {
+          console.error('Failed to refund skip credits after error:', refundError);
+        }
+        spentSkipCredits = null;
+      }
+
+      if (error instanceof CreditError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+
       res.status(500).json({ error: 'Failed to skip to next' });
     }
   }

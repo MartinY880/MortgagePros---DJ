@@ -1,6 +1,6 @@
 import { clerkClient } from '../lib/clerk';
 
-export const GUEST_DAILY_CREDIT_LIMIT = 50;
+export const GUEST_DAILY_CREDIT_LIMIT = 100;
 export const GUEST_TRACK_COST = 10;
 export const VOTE_REACTION_COST = 5;
 

@@ -49,9 +49,37 @@ model Session {
   guests      Guest[]
   lastActiveUsers User[] @relation("LastActiveSession")
   scheduledPlaybacks ScheduledPlayback[]
+  skipCounter SessionSkipCounter?
+  skipVotes SessionSkipVote[]
   
   @@index([code])
   @@index([hostId])
+}
+
+model SessionSkipCounter {
+  sessionId      String   @id
+  spotifyTrackId String?
+  skipCount      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([spotifyTrackId])
+}
+
+model SessionSkipVote {
+  id             String   @id @default(uuid())
+  sessionId      String
+  spotifyTrackId String
+  guestId        String
+  createdAt      DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  guest   Guest   @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, spotifyTrackId, guestId])
+  @@index([sessionId, spotifyTrackId])
 }
 
 model QueueItem {
@@ -109,6 +137,7 @@ model Guest {
   session    Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   queueItems QueueItem[]
   votes      Vote[]
+  skipVotes  SessionSkipVote[]
 
   @@index([sessionId])
   @@index([clerkUserId])

@@ -191,7 +191,7 @@ For Docker deployments (including the provided `docker-compose.yml`), the libres
 2. **Guests**: Join using the session code
 3. **Add Songs**: Search and add tracks to the queue
 4. **Vote**: Upvote/downvote songs (higher votes play first)
-5. **Control**: Host can play/pause/skip tracks
+5. **Control**: Host can play/pause/skip tracks; guests can now spend skip votes to trigger a skip once enough have been cast
 
 ## Troubleshooting
 

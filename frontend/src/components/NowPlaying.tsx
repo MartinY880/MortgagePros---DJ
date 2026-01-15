@@ -1,7 +1,9 @@
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
 import { Play, Pause, SkipForward } from 'lucide-react';
 import { spotifyApi } from '../services/api';
-import { PlaybackRequester, PlaybackState } from '../types';
+import { PlaybackRequester, PlaybackState, SkipState, CreditState } from '../types';
+
+const DEFAULT_SKIP_THRESHOLD = 3;
 
 interface NowPlayingProps {
   canControl?: boolean;
@@ -12,6 +14,11 @@ interface NowPlayingProps {
   setError: Dispatch<SetStateAction<string | null>>;
   onRefresh: () => Promise<void>;
   updatePlayback: (updater: (current: PlaybackState | null) => PlaybackState | null) => void;
+  participantType: 'host' | 'guest' | 'none';
+  skipState: SkipState | null;
+  guestCredits?: CreditState | null;
+  skipCost: number;
+  onGuestSkip?: () => Promise<void>;
 }
 
 export default function NowPlaying({
@@ -23,8 +30,24 @@ export default function NowPlaying({
   setError,
   onRefresh,
   updatePlayback,
+  participantType,
+  skipState,
+  guestCredits,
+  skipCost,
+  onGuestSkip,
 }: NowPlayingProps) {
+  const [guestSkipPending, setGuestSkipPending] = useState(false);
   const isPlaying = playback?.is_playing ?? false;
+  const showGuestSkip = participantType === 'guest' && typeof onGuestSkip === 'function';
+  const hasTrack = Boolean(playback?.item);
+  const skipCount = skipState?.skipCount ?? 0;
+  const skipThreshold = skipState?.threshold ?? DEFAULT_SKIP_THRESHOLD;
+  const skipTriggered = Boolean(skipState?.triggered);
+  const guestBalance = guestCredits?.currentCredits ?? null;
+  const guestHasCredits = guestBalance === null || guestBalance >= skipCost;
+  const canGuestSkip = showGuestSkip && hasTrack && skipThreshold > 0;
+  const guestSkipDisabled = !canGuestSkip || !guestHasCredits || guestSkipPending;
+  const skipProgress = skipThreshold > 0 ? `${Math.min(skipCount, skipThreshold)} / ${skipThreshold}` : `${skipCount}`;
 
   const handlePlayPause = async () => {
     if (!canControl) return;
@@ -58,6 +81,24 @@ export default function NowPlaying({
     } catch (error) {
       console.error('Skip error:', error);
       setError('Failed to skip track. Ensure Spotify is active on a device.');
+    }
+  };
+
+  const handleGuestSkipClick = async () => {
+    if (!onGuestSkip || guestSkipDisabled) {
+      return;
+    }
+
+    setGuestSkipPending(true);
+
+    try {
+      await onGuestSkip();
+      setError(null);
+    } catch (skipError) {
+      console.error('Guest skip handler error:', skipError);
+      setError('Unable to submit skip vote right now.');
+    } finally {
+      setGuestSkipPending(false);
     }
   };
 
@@ -107,24 +148,54 @@ export default function NowPlaying({
           )}
         </div>
 
-        {canControl && (
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-3">
+          {canControl && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePlayPause}
+                className="bg-spotify-green hover:bg-spotify-hover text-white p-4 rounded-full transition transform hover:scale-105"
+              >
+                {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+              </button>
+              
+              <button
+                onClick={handleNext}
+                className="bg-spotify-gray hover:bg-gray-600 text-white p-4 rounded-full transition"
+              >
+                <SkipForward size={24} />
+              </button>
+            </div>
+          )}
+
+          {showGuestSkip && (
             <button
-              onClick={handlePlayPause}
-              className="bg-spotify-green hover:bg-spotify-hover text-white p-4 rounded-full transition transform hover:scale-105"
+              onClick={handleGuestSkipClick}
+              disabled={guestSkipDisabled}
+              className={`p-3 rounded-lg text-sm font-semibold transition w-full sm:w-auto text-center ${
+                guestSkipDisabled
+                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                  : 'bg-spotify-gray hover:bg-gray-600 text-white'
+              }`}
             >
-              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+              {guestSkipPending ? 'Submitting…' : `Vote to Skip (-${skipCost} credits)`}
             </button>
-            
-            <button
-              onClick={handleNext}
-              className="bg-spotify-gray hover:bg-gray-600 text-white p-4 rounded-full transition"
-            >
-              <SkipForward size={24} />
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {(skipState || showGuestSkip) && (
+        <div className="mt-4 bg-spotify-black/40 rounded-lg p-3 text-sm text-gray-300">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              <span className="text-white font-semibold">Skip votes:</span> {skipProgress}
+              {skipTriggered ? ' · Skip triggered' : ''}
+            </span>
+            {showGuestSkip && !guestHasCredits && (
+              <span className="text-red-400 text-xs">Need {skipCost} credits to vote</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

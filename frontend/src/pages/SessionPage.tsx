@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2, Settings } from 'lucide-react';
-import { guestApi, sessionApi } from '../services/api';
+import { guestApi, sessionApi, spotifyApi } from '../services/api';
 import { socketService } from '../services/socket';
-import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, CreditState } from '../types';
+import type { Session, SessionParticipant, QueueState, PlaybackState, PlaybackRequester, SkipState, CreditState } from '../types';
 import QueueList from '../components/QueueList';
 import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
@@ -16,6 +16,7 @@ import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
 
 const GUEST_TRACK_COST = 10;
+const SKIP_VOTE_COST = 5;
 
 export default function SessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -60,12 +61,13 @@ export default function SessionPage() {
     data: playbackData,
     error: playbackFetchError,
     mutate: mutatePlayback,
-  } = useApiSWR<{ playback: PlaybackState | null; requester: PlaybackRequester | null }>(
+  } = useApiSWR<{ playback: PlaybackState | null; requester: PlaybackRequester | null; skip: SkipState | null }>(
     isSignedIn && sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
     { shouldRetryOnError: false }
   );
   const playback = playbackData?.playback ?? null;
   const playbackRequester = playbackData?.requester ?? null;
+  const skipState = playbackData?.skip ?? null;
 
   const {
     data: participantData,
@@ -221,6 +223,7 @@ export default function SessionPage() {
       void mutatePlayback({
         playback: data.playback ?? null,
         requester: data.requester ?? null,
+        skip: data.skip ?? null,
       }, false);
       setPlaybackError(null);
     });
@@ -303,6 +306,94 @@ export default function SessionPage() {
       await executeJoin();
     } catch {
       // Error message handled in executeJoin
+    }
+  };
+
+  const handleGuestSkip = async () => {
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      const response = await spotifyApi.next(sessionId);
+      const payload = response?.data ?? {};
+      const updatedSkip = (payload.skip as SkipState | null | undefined) ?? null;
+      const updatedCredits = payload.credits as CreditState | undefined;
+
+      if (updatedCredits) {
+        setGuestCredits(updatedCredits);
+      }
+
+      if (updatedSkip) {
+        void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null; skip: SkipState | null } | undefined) => {
+          const baseline = previous ?? {
+            playback: playback ?? null,
+            requester: playbackRequester ?? null,
+            skip: null,
+          };
+
+          return {
+            playback: baseline.playback ?? playback ?? null,
+            requester: baseline.requester ?? playbackRequester ?? null,
+            skip: updatedSkip,
+          };
+        }, false);
+      }
+
+      setPlaybackError(null);
+
+      setTimeout(() => {
+        void mutatePlayback();
+      }, 750);
+    } catch (error: any) {
+      console.error('Guest skip error:', error);
+      const status = error?.response?.status;
+      const payload = error?.response?.data ?? {};
+      const message = payload?.error ?? 'Failed to submit skip vote';
+
+      const payloadCredits = payload?.credits as CreditState | undefined;
+      if (payloadCredits) {
+        setGuestCredits(payloadCredits);
+      }
+
+      const payloadSkip = payload?.skip as SkipState | undefined;
+      if (payloadSkip) {
+        void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null; skip: SkipState | null } | undefined) => {
+          const baseline = previous ?? {
+            playback: playback ?? null,
+            requester: playbackRequester ?? null,
+            skip: null,
+          };
+
+          return {
+            playback: baseline.playback ?? playback ?? null,
+            requester: baseline.requester ?? playbackRequester ?? null,
+            skip: payloadSkip,
+          };
+        }, false);
+      }
+
+      if (status === 404 && typeof message === 'string' && message.includes('no longer active')) {
+        setSessionInactiveError(message);
+        return;
+      }
+
+      if (status === 403 && typeof message === 'string' && message.toLowerCase().includes('credit')) {
+        alert(message);
+        return;
+      }
+
+      if (status === 409) {
+        alert(message);
+        return;
+      }
+
+      if (status === 401 || status === 403) {
+        await handleRequireAccess();
+        return;
+      }
+
+      setPlaybackError(message);
     }
   };
 
@@ -399,11 +490,12 @@ export default function SessionPage() {
   const hasInsufficientCredits = guestCredits !== null && guestCredits.currentCredits < GUEST_TRACK_COST;
 
   const updatePlayback = (updater: (current: PlaybackState | null) => PlaybackState | null) => {
-    void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null } | undefined) => {
+    void mutatePlayback((previous: { playback: PlaybackState | null; requester: PlaybackRequester | null; skip: SkipState | null } | undefined) => {
       const current = previous?.playback ?? null;
       return {
         playback: updater(current),
         requester: previous?.requester ?? null,
+        skip: previous?.skip ?? null,
       };
     }, false);
   };
@@ -659,13 +751,18 @@ export default function SessionPage() {
               setError={setPlaybackError}
               onRefresh={refreshPlayback}
               updatePlayback={updatePlayback}
+              participantType={participant?.type ?? 'none'}
+              skipState={skipState}
+              guestCredits={guestCredits}
+              skipCost={SKIP_VOTE_COST}
+              onGuestSkip={participant?.type === 'guest' ? handleGuestSkip : undefined}
             />
             <NextUp track={queueState.nextUp} />
             {participant?.type === 'guest' && (
               <div className="bg-spotify-gray p-4 rounded-lg flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-white font-semibold">Your Credits</p>
-                  <p className="text-gray-400 text-xs">Each track costs {GUEST_TRACK_COST} credits · Each vote costs 5 credits</p>
+                  <p className="text-gray-400 text-xs">Each track costs {GUEST_TRACK_COST} credits · Votes and skips cost {SKIP_VOTE_COST} credits</p>
                 </div>
                 <div className="text-right">
                   <p className={`${hasInsufficientCredits ? 'text-red-400' : 'text-spotify-green'} text-2xl font-bold`}>

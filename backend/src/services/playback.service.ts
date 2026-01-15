@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { queueService } from './queue.service';
 import { spotifyService } from './spotify.service';
 import { broadcastQueueUpdate, broadcastPlaybackUpdate } from '../sockets/handlers';
+import { skipCounterService } from './skipCounter.service';
 
 interface MonitorState {
   hostId: string;
@@ -176,17 +177,25 @@ class PlaybackService {
           queueState = await queueService.getQueueWithNext(sessionId);
           nextDelay = POST_TRACK_END_DELAY_MS;
         }
+
+        const skipState = await skipCounterService.syncCurrentTrack(sessionId, currentTrackId);
+
         broadcastPlaybackUpdate(this.io, sessionId, {
           playback,
           requester,
+          skip: skipState,
         });
       } else {
         if (!queueState.nextUp) {
           monitor.lastQueuedItemId = null;
         }
+
+        const skipState = await skipCounterService.syncCurrentTrack(sessionId, null);
+
         broadcastPlaybackUpdate(this.io, sessionId, {
           playback: playback ?? null,
           requester: null,
+          skip: skipState,
         });
         nextDelay = POST_TRACK_END_DELAY_MS;
       }

@@ -13,6 +13,6 @@ router.get('/search-artists', requireClerkAuth, optionalAuth, spotifyController.
 router.get('/playback', requireClerkAuth, optionalAuth, spotifyController.getCurrentPlayback);
 router.post('/play', requireClerkAuth, requireAuth, spotifyController.play);
 router.post('/pause', requireClerkAuth, requireAuth, spotifyController.pause);
-router.post('/next', requireClerkAuth, requireAuth, spotifyController.next);
+router.post('/next', requireClerkAuth, optionalAuth, spotifyController.next);
 
 export default router;

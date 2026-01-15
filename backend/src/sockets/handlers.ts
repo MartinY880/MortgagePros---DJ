@@ -68,10 +68,11 @@ export function setupSocketHandlers(io: SocketIOServer) {
     });
 
     // Broadcast now playing
-    socket.on('now_playing', (data: { sessionId: string; playback: any; requester?: { type: 'host' | 'guest' | 'unknown'; name: string } | null }) => {
+    socket.on('now_playing', (data: { sessionId: string; playback: any; requester?: { type: 'host' | 'guest' | 'unknown'; name: string } | null; skip?: any }) => {
       io.to(data.sessionId).emit('now_playing', {
         playback: data.playback ?? null,
         requester: data.requester ?? null,
+        skip: data.skip ?? null,
       });
     });
 
@@ -116,10 +117,15 @@ export function broadcastVoteUpdate(io: SocketIOServer, sessionId: string, queue
 export function broadcastPlaybackUpdate(
   io: SocketIOServer,
   sessionId: string,
-  payload: { playback: any; requester?: { type: 'host' | 'guest' | 'unknown'; name: string } | null }
+  payload: {
+    playback: any;
+    requester?: { type: 'host' | 'guest' | 'unknown'; name: string } | null;
+    skip?: any;
+  }
 ) {
   io.to(sessionId).emit('now_playing', {
     playback: payload.playback ?? null,
     requester: payload.requester ?? null,
+    skip: payload.skip ?? null,
   });
 }
