@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { authApi, guestApi } from '../services/api';
 import { Session } from '../types';
 import { useClerk, useUser } from '@clerk/clerk-react';
+import { isEmbedded, isIframeAuthenticated, onIframeAuthChange } from '../services/iframeAuth';
+import EmbeddedSignIn from '../components/EmbeddedSignIn';
 
 type LandingLocationState = {
   requireSignIn?: boolean;
@@ -33,6 +35,16 @@ export default function LandingPage() {
   const { isLoaded, isSignedIn } = useUser();
   const { openSignIn, signOut } = useClerk();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showEmbeddedSignIn, setShowEmbeddedSignIn] = useState(false);
+  const [iframeAuthed, setIframeAuthed] = useState(isIframeAuthenticated());
+
+  // Subscribe to iframe auth changes (token received from popup)
+  useEffect(() => {
+    return onIframeAuthChange(() => setIframeAuthed(isIframeAuthenticated()));
+  }, []);
+
+  // In iframe context, auth can come from the iframe token instead of Clerk
+  const isAuthenticated = isSignedIn || (isEmbedded() && iframeAuthed);
 
   const startSpotifyConnect = useCallback(async () => {
     try {
@@ -74,7 +86,7 @@ export default function LandingPage() {
   }, [joinCode, navigate]);
 
   useEffect(() => {
-    if (!pendingAction || !isSignedIn) {
+    if (!pendingAction || !isAuthenticated) {
       return;
     }
 
@@ -119,6 +131,13 @@ export default function LandingPage() {
       return;
     }
 
+    // Clerk sign-in modals/redirects crash inside iframes — show inline form instead
+    if (isEmbedded()) {
+      setPendingAction(action);
+      setShowEmbeddedSignIn(true);
+      return;
+    }
+
     setPendingAction(action);
 
     try {
@@ -136,7 +155,7 @@ export default function LandingPage() {
       return;
     }
 
-    if (!isSignedIn) {
+    if (!isAuthenticated) {
       await promptClerkSignIn('host');
       return;
     }
@@ -153,7 +172,7 @@ export default function LandingPage() {
       return;
     }
 
-    if (!isSignedIn) {
+    if (!isAuthenticated) {
       await promptClerkSignIn('guest');
       return;
     }
@@ -169,6 +188,11 @@ export default function LandingPage() {
     const redirectRequest = locationState;
 
     if (!redirectRequest?.requireSignIn) {
+      return;
+    }
+
+    // Don't trigger Clerk sign-in inside iframes
+    if (isEmbedded()) {
       return;
     }
 
@@ -198,10 +222,29 @@ export default function LandingPage() {
     }
   }, [handledAuthRedirect, locationState]);
 
+  if (showEmbeddedSignIn && isEmbedded() && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <button
+            onClick={() => {
+              setShowEmbeddedSignIn(false);
+              setPendingAction(null);
+            }}
+            className="text-gray-400 hover:text-white mb-4 text-sm transition"
+          >
+            ← Back
+          </button>
+          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
-        {isLoaded && isSignedIn && (
+        {isLoaded && isAuthenticated && (
           <div className="flex justify-end mb-4">
             <button
               onClick={handleLogout}

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isEmbedded, getIframeToken } from './iframeAuth';
 
 let apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
 let socketBaseUrl = import.meta.env.VITE_SOCKET_URL || null;
@@ -45,16 +46,47 @@ declare global {
   }
 }
 
+const clerkTokenWithTimeout = async (ms = 3000): Promise<string | null> => {
+  const getter = window.Clerk?.session?.getToken();
+  if (!getter) return null;
+
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+
+  try {
+    const result = await Promise.race([getter, timeout]);
+    return result ?? null;
+  } finally {
+    clearTimeout(timer!);
+  }
+};
+
 api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
-    try {
-      const token = await window.Clerk?.session?.getToken();
-      if (token) {
+    // In iframe context, use the HMAC iframe token instead of Clerk JWT
+    if (isEmbedded()) {
+      const iframeToken = getIframeToken();
+      if (iframeToken) {
         config.headers = config.headers ?? {};
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization = `IframeToken ${iframeToken}`;
       }
+      return config;
+    }
+
+    // Normal (non-iframe) context: use Clerk JWT
+    let token: string | null = null;
+
+    try {
+      token = await clerkTokenWithTimeout();
     } catch (error) {
       console.warn('Failed to retrieve Clerk token:', error);
+    }
+
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
   }
 
@@ -65,6 +97,8 @@ export const authApi = {
   getAuthUrl: () => api.get('/auth/login'),
   getMe: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
+  getIframeToken: () =>
+    api.post<{ token: string }>('/auth/iframe-token'),
 };
 
 export const sessionApi = {

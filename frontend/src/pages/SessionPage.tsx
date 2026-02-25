@@ -14,6 +14,8 @@ import ScheduledPlaybackManager from '../components/ScheduledPlaybackManager';
 import BannedTracksManager from '../components/BannedTracksManager';
 import { useApiSWR } from '../hooks/useApiSWR';
 import { useClerk, useUser } from '@clerk/clerk-react';
+import { isEmbedded, isIframeAuthenticated, onIframeAuthChange } from '../services/iframeAuth';
+import EmbeddedSignIn from '../components/EmbeddedSignIn';
 
 const GUEST_TRACK_COST = 10;
 const SKIP_VOTE_COST = 5;
@@ -37,13 +39,22 @@ export default function SessionPage() {
   const [settingsMaxSongDuration, setSettingsMaxSongDuration] = useState<number | ''>('');
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const { openSignIn } = useClerk();
+  const [iframeAuthed, setIframeAuthed] = useState(isIframeAuthenticated());
+
+  // Subscribe to iframe auth changes (token received from popup)
+  useEffect(() => {
+    return onIframeAuthChange(() => setIframeAuthed(isIframeAuthenticated()));
+  }, []);
+
+  // In iframe context, auth can come from the iframe token instead of Clerk
+  const isAuthenticated = isSignedIn || (isEmbedded() && iframeAuthed);
 
   const {
     data: sessionData,
     error: sessionError,
     isLoading: sessionLoading,
   } = useApiSWR<{ session: Session }>(
-    sessionId ? `/sessions/${sessionId}` : null,
+    isAuthenticated && sessionId ? `/sessions/${sessionId}` : null,
     { shouldRetryOnError: false }
   );
   const session = sessionData?.session ?? null;
@@ -52,7 +63,7 @@ export default function SessionPage() {
     data: queueData,
     mutate: mutateQueue,
   } = useApiSWR<QueueState>(
-    sessionId ? `/queue/${sessionId}` : null,
+    isAuthenticated && sessionId ? `/queue/${sessionId}` : null,
     { keepPreviousData: true }
   );
   const queueState: QueueState = queueData ?? { nextUp: null, queue: [] };
@@ -62,7 +73,7 @@ export default function SessionPage() {
     error: playbackFetchError,
     mutate: mutatePlayback,
   } = useApiSWR<{ playback: PlaybackState | null; requester: PlaybackRequester | null; skip: SkipState | null }>(
-    isSignedIn && sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
+    isAuthenticated && sessionId ? `/spotify/playback?sessionId=${sessionId}` : null,
     { shouldRetryOnError: false }
   );
   const playback = playbackData?.playback ?? null;
@@ -74,7 +85,7 @@ export default function SessionPage() {
     error: participantError,
     mutate: mutateParticipant,
   } = useApiSWR<{ participant: SessionParticipant }>(
-    isSignedIn && sessionId ? `/sessions/${sessionId}/participant` : null,
+    isAuthenticated && sessionId ? `/sessions/${sessionId}/participant` : null,
     { revalidateOnFocus: false }
   );
   const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
@@ -127,7 +138,7 @@ export default function SessionPage() {
       : undefined;
 
   useEffect(() => {
-    if (!isSignedIn || !sessionId) {
+    if (!isAuthenticated || !sessionId) {
       return;
     }
 
@@ -150,7 +161,7 @@ export default function SessionPage() {
     };
 
     void attempt();
-  }, [isSignedIn, sessionId, participant?.type, autoJoinStatus, executeJoin, invitedSessionId]);
+  }, [isAuthenticated, sessionId, participant?.type, autoJoinStatus, executeJoin, invitedSessionId]);
 
   useEffect(() => {
     if (participant && participant.type !== 'none') {
@@ -164,14 +175,19 @@ export default function SessionPage() {
       const errorMessage = sessionError?.response?.data?.error;
       if (errorMessage && errorMessage.includes('no longer active')) {
         setSessionInactiveError(errorMessage);
-      } else {
+      } else if (!isEmbedded()) {
         navigate('/dashboard');
       }
     }
   }, [sessionError, navigate]);
 
   useEffect(() => {
-    if (!isUserLoaded || isSignedIn || signInPrompted) {
+    if (!isUserLoaded || isAuthenticated || signInPrompted) {
+      return;
+    }
+
+    // Don't try to open Clerk sign-in inside an iframe — it will crash
+    if (isEmbedded()) {
       return;
     }
 
@@ -180,9 +196,10 @@ export default function SessionPage() {
     void openSignIn({
       forceRedirectUrl: window.location.href,
     });
-  }, [isUserLoaded, isSignedIn, openSignIn, signInPrompted]);
+  }, [isUserLoaded, isAuthenticated, openSignIn, signInPrompted]);
 
   useEffect(() => {
+
     if (playbackFetchError) {
       const status = playbackFetchError.response?.status;
       const message = status === 401 || status === 403
@@ -196,7 +213,7 @@ export default function SessionPage() {
   }, [playbackFetchError, playbackData]);
 
   useEffect(() => {
-    if (!sessionId || !isSignedIn || participant?.type !== 'host') {
+    if (!sessionId || !isAuthenticated || participant?.type !== 'host') {
       return;
     }
 
@@ -207,10 +224,10 @@ export default function SessionPage() {
     }, KEEP_ALIVE_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [sessionId, participant?.type, mutatePlayback, isSignedIn]);
+  }, [sessionId, participant?.type, mutatePlayback, isAuthenticated]);
 
   useEffect(() => {
-    if (!sessionId || !isSignedIn) {
+    if (!sessionId || !isAuthenticated) {
       return;
     }
 
@@ -236,7 +253,7 @@ export default function SessionPage() {
       socketService.leaveSession(sessionId);
       socketService.disconnect();
     };
-  }, [sessionId, mutateQueue, mutatePlayback, isSignedIn]);
+  }, [sessionId, mutateQueue, mutatePlayback, isAuthenticated]);
 
   const handleCopyCode = () => {
     if (session) {
@@ -291,13 +308,15 @@ export default function SessionPage() {
       return;
     }
 
-    if (!isSignedIn) {
-      try {
-        await openSignIn({
-          forceRedirectUrl: window.location.href,
-        });
-      } catch (error) {
-        console.error('Clerk sign-in aborted:', error);
+    if (!isAuthenticated) {
+      if (!isEmbedded()) {
+        try {
+          await openSignIn({
+            forceRedirectUrl: window.location.href,
+          });
+        } catch (error) {
+          console.error('Clerk sign-in aborted:', error);
+        }
       }
       return;
     }
@@ -405,7 +424,15 @@ export default function SessionPage() {
     );
   }
 
-  if (!isSignedIn) {
+  if (!isAuthenticated) {
+    if (isEmbedded()) {
+      return (
+        <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
+          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} />
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
         <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
@@ -505,9 +532,12 @@ export default function SessionPage() {
     queueState.queue.reduce((sum, item) => sum + item.voteScore, 0);
   const isHost = participant?.type === 'host';
 
+  const embedded = isEmbedded();
+
   return (
     <div className="min-h-screen bg-spotify-dark">
-      {/* Header */}
+      {/* Header – hidden when embedded */}
+      {!embedded && (
       <header className="bg-spotify-black border-b border-spotify-gray p-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -548,6 +578,7 @@ export default function SessionPage() {
           </div>
         </div>
       </header>
+      )}
 
       <main className="max-w-6xl mx-auto p-6">
         {autoJoinStatus === 'pending' && participant?.type === 'none' && (
@@ -739,9 +770,9 @@ export default function SessionPage() {
             </div>
           </div>
         )}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className={`grid ${embedded ? '' : 'lg:grid-cols-3'} gap-6`}>
           {/* Main Queue Section */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className={`${embedded ? '' : 'lg:col-span-2'} space-y-6`}>
             <NowPlaying
               canControl={participant?.type === 'host'}
               sessionId={session.id}
@@ -796,7 +827,8 @@ export default function SessionPage() {
             />
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar – hidden when embedded */}
+          {!embedded && (
           <div className="space-y-6">
             <Leaderboard
               sessionId={session.id}
@@ -812,6 +844,7 @@ export default function SessionPage() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>

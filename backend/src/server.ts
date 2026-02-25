@@ -9,6 +9,7 @@ import { setupSocketHandlers } from './sockets/handlers';
 import { playbackService } from './services/playback.service';
 import { scheduledPlaybackProcessor } from './services/scheduledPlaybackProcessor';
 import { clerkMiddleware } from './middleware/clerk.middleware';
+import { hydrateIframeSession } from './middleware/auth.middleware';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -79,6 +80,10 @@ app.use(
     },
   })
 );
+
+// For iframe-authenticated requests, populate req.session.guestSessions from the DB
+// (session cookies can't persist in cross-origin iframes)
+app.use(hydrateIframeSession);
 
 // Make io available in routes
 app.set('io', io);

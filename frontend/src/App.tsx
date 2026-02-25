@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import SessionPage from './pages/SessionPage';
 import GuestRedirect from './pages/GuestRedirect';
+import AuthPopup from './pages/AuthPopup';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/session/:sessionId" element={<SessionPage />} />
         <Route path="/join/:sessionCode" element={<GuestRedirect />} />
+        <Route path="/auth/popup" element={<AuthPopup />} />
       </Routes>
     </BrowserRouter>
   );
