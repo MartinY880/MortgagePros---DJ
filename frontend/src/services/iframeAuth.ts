@@ -9,22 +9,37 @@
  * 1. A popup window authenticates with Clerk (works — top-level context)
  * 2. The popup calls POST /api/auth/iframe-token to get an HMAC token
  * 3. The popup sends the token to the iframe via postMessage
- * 4. The iframe stores the token here (in memory) and attaches it to
+ * 4. The iframe stores the token in localStorage so the user stays
+ *    signed in across page reloads / re-embeds, and attaches it to
  *    every API request as `Authorization: IframeToken <token>`
  */
+
+const STORAGE_KEY = 'dj_iframe_token';
 
 /** True when the app is rendered inside an iframe. */
 export const isEmbedded = (): boolean =>
   typeof window !== 'undefined' && window.self !== window.top;
 
-// ---- Token storage (module-scoped, memory only) ----
+// ---- Token storage (localStorage-backed) ----
 
 let iframeToken: string | null = null;
 let onAuthChangeCallbacks: Array<() => void> = [];
 
+// Hydrate from localStorage on module load
+try {
+  iframeToken = localStorage.getItem(STORAGE_KEY);
+} catch {
+  // localStorage may be blocked in some iframe contexts — fall back to memory-only
+}
+
 /** Store a new iframe token received from the popup. */
 export function setIframeToken(token: string): void {
   iframeToken = token;
+  try {
+    localStorage.setItem(STORAGE_KEY, token);
+  } catch {
+    // Silently fall back to memory-only
+  }
   onAuthChangeCallbacks.forEach((cb) => cb());
 }
 
@@ -41,6 +56,11 @@ export function isIframeAuthenticated(): boolean {
 /** Clear the iframe token (e.g. on logout). */
 export function clearIframeToken(): void {
   iframeToken = null;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore
+  }
   onAuthChangeCallbacks.forEach((cb) => cb());
 }
 
