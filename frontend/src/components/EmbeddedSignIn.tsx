@@ -10,10 +10,11 @@ import { setIframeToken } from '../services/iframeAuth';
  * via postMessage. We store the token in memory and notify the parent
  * that auth is complete — no Clerk client-side SDK required in the iframe.
  */
-export default function EmbeddedSignIn({ onAuthenticated }: { onAuthenticated?: () => void }) {
+export default function EmbeddedSignIn({ onAuthenticated, autoOpen = false }: { onAuthenticated?: () => void; autoOpen?: boolean }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const popupRef = useRef<Window | null>(null);
+  const autoOpenedRef = useRef(false);
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -46,7 +47,9 @@ export default function EmbeddedSignIn({ onAuthenticated }: { onAuthenticated?: 
     return () => clearInterval(interval);
   }, [loading]);
 
-  const openPopup = () => {
+  const openPopup = useCallback(() => {
+    if (popupRef.current && !popupRef.current.closed) return;
+
     setError('');
     setLoading(true);
 
@@ -68,7 +71,15 @@ export default function EmbeddedSignIn({ onAuthenticated }: { onAuthenticated?: 
     }
 
     popupRef.current = popup;
-  };
+  }, []);
+
+  // Auto-open the popup on mount when autoOpen is true
+  useEffect(() => {
+    if (autoOpen && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      openPopup();
+    }
+  }, [autoOpen, openPopup]);
 
   return (
     <div className="bg-spotify-gray rounded-lg p-8 max-w-sm w-full mx-auto">

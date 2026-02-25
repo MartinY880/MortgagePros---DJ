@@ -416,7 +416,7 @@ export default function SessionPage() {
     }
   };
 
-  if (!isUserLoaded) {
+  if (!isUserLoaded && !iframeAuthed) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
         <div className="text-white text-xl">Loading account...</div>
@@ -428,7 +428,7 @@ export default function SessionPage() {
     if (isEmbedded()) {
       return (
         <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
-          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} />
+          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} autoOpen />
         </div>
       );
     }
