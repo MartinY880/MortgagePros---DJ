@@ -43,7 +43,7 @@ export interface QueueItem {
   addedByGuest?: {
     id: string;
     name: string;
-    clerkUserId?: string | null;
+    userId?: string | null;
   };
   votes?: Vote[];
 }

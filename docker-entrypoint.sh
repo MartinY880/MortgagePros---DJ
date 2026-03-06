@@ -59,7 +59,7 @@ fi
 
 if [ -d "/app/frontend/dist" ]; then
   echo "🛠️ Generating frontend runtime configuration..."
-  node -e "const fs = require('fs'); const path = require('path'); const { config } = require('/app/backend/dist/config/index.js'); const outputPath = '/app/frontend/dist/app-config.json'; const payload = { apiBaseUrl: config.frontend.apiBaseUrl, socketUrl: config.frontend.socketUrl, clerkPublishableKey: config.frontend.clerkPublishableKey }; fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2));" && \
+  node -e "const fs = require('fs'); const path = require('path'); const { config } = require('/app/backend/dist/config/index.js'); const outputPath = '/app/frontend/dist/app-config.json'; const payload = { apiBaseUrl: config.frontend.apiBaseUrl, socketUrl: config.frontend.socketUrl, logtoEndpoint: config.frontend.logtoEndpoint, logtoAppId: config.frontend.logtoAppId, logtoApiResource: config.frontend.logtoApiResource }; fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2));" && \
   echo "✅ Frontend config written to /app/frontend/dist/app-config.json" || \
   echo "⚠️ Failed to generate frontend runtime config";
 fi

@@ -194,7 +194,7 @@ export class SessionService {
     });
   }
 
-  async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string, clerkUserId?: string) {
+  async createOrUpdateGuest(sessionId: string, guestId: string | undefined, name: string, authUserId?: string) {
     const guestModel = (prisma as any).guest;
     const sanitizedName = name.trim();
 
@@ -214,8 +214,9 @@ export class SessionService {
           updates.name = sanitizedName;
         }
 
-        if (!existingGuest.clerkUserId && clerkUserId) {
-          updates.clerkUserId = clerkUserId;
+        // clerkUserId is the DB column name (kept for migration compat); stores Logto user ID
+        if (!existingGuest.clerkUserId && authUserId) {
+          updates.clerkUserId = authUserId;
         }
 
         if (Object.keys(updates).length === 0) {
@@ -233,7 +234,7 @@ export class SessionService {
       data: {
         sessionId,
         name: sanitizedName,
-        ...(clerkUserId ? { clerkUserId } : {}),
+        ...(authUserId ? { clerkUserId: authUserId } : {}),
       },
     });
   }

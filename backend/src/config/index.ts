@@ -70,11 +70,14 @@ const deriveSocketUrl = () => {
 
 const socketUrl = deriveSocketUrl();
 
-const frontendClerkPublishableKey = process.env.FRONTEND_CLERK_PUBLISHABLE_KEY
-  || process.env.CLERK_PUBLISHABLE_KEY;
+const logtoEndpoint = process.env.LOGTO_ENDPOINT?.replace(/\/+$/, '');
+const logtoAppId = process.env.LOGTO_APP_ID?.trim();
+const logtoApiResource = process.env.LOGTO_API_RESOURCE?.trim();
 
-if (!frontendClerkPublishableKey) {
-  throw new Error('Missing frontend Clerk publishable key. Set FRONTEND_CLERK_PUBLISHABLE_KEY or CLERK_PUBLISHABLE_KEY.');
+if (!logtoEndpoint || !logtoAppId || !logtoApiResource) {
+  throw new Error(
+    'Missing Logto configuration. Set LOGTO_ENDPOINT, LOGTO_APP_ID, and LOGTO_API_RESOURCE.',
+  );
 }
 
 export const config = {
@@ -95,14 +98,17 @@ export const config = {
   database: {
     url: process.env.DATABASE_URL || 'file:./dev.db',
   },
-  clerk: {
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY!,
-    secretKey: process.env.CLERK_SECRET_KEY!,
+  logto: {
+    endpoint: logtoEndpoint!,
+    appId: logtoAppId!,
+    apiResource: logtoApiResource!,
   },
   frontend: {
     apiBaseUrl,
     socketUrl,
-    clerkPublishableKey: frontendClerkPublishableKey!,
+    logtoEndpoint: logtoEndpoint!,
+    logtoAppId: logtoAppId!,
+    logtoApiResource: logtoApiResource!,
   },
 };
 
@@ -112,8 +118,9 @@ const requiredEnvVars = [
   'SPOTIFY_CLIENT_SECRET',
   'SPOTIFY_REDIRECT_URI',
   'SESSION_SECRET',
-  'CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
+  'LOGTO_ENDPOINT',
+  'LOGTO_APP_ID',
+  'LOGTO_API_RESOURCE',
 ];
 
 for (const envVar of requiredEnvVars) {

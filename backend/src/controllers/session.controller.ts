@@ -1,26 +1,20 @@
 import { Request, Response } from 'express';
 import { sessionService } from '../services/session.service';
-import { clerkClient } from '../lib/clerk';
 import { creditService, CreditError, CreditState } from '../services/credit.service';
 
 export class SessionController {
-  private async resolveClerkFullName(userId: string) {
-    try {
-      const user = await clerkClient.users.getUser(userId);
-
-      const fullName = user.fullName
-        || [user.firstName, user.lastName].filter(Boolean).join(' ')
-        || user.username
-        || user.primaryEmailAddress?.emailAddress
-        || user.id;
-
-      const normalized = fullName?.trim();
-
-      return normalized && normalized.length > 0 ? normalized : 'Guest DJ';
-    } catch (error) {
-      console.error('Failed to resolve Clerk user name:', error);
-      return 'Guest DJ';
+  /**
+   * Resolve a display name for the joining user.
+   * The frontend sends the user's name from Logto ID token claims.
+   * Falls back to 'Guest DJ' if not provided.
+   */
+  private resolveDisplayName(req: Request): string {
+    const name = req.body?.displayName;
+    if (typeof name === 'string') {
+      const trimmed = name.trim();
+      if (trimmed.length > 0) return trimmed;
     }
+    return 'Guest DJ';
   }
 
   create = async (req: Request, res: Response) => {
@@ -67,9 +61,9 @@ export class SessionController {
   joinByCode = async (req: Request, res: Response) => {
     try {
       const { code } = req.params;
-      const clerkUserId = req.auth?.userId;
+      const authUserId = req.auth?.userId;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
@@ -87,7 +81,7 @@ export class SessionController {
 
       let credits: CreditState;
       try {
-        credits = await creditService.ensureDailyCredits(clerkUserId);
+        credits = await creditService.ensureDailyCredits(authUserId, req.auth?.roles);
       } catch (error) {
         if (error instanceof CreditError) {
           return res.status(error.status).json({ error: error.message });
@@ -95,12 +89,12 @@ export class SessionController {
         throw error;
       }
 
-      const guestName = await this.resolveClerkFullName(clerkUserId);
+      const guestName = this.resolveDisplayName(req);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
         guestName,
-        clerkUserId
+        authUserId
       );
 
       if (!req.session.guestSessions) {
@@ -122,9 +116,9 @@ export class SessionController {
   joinById = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const clerkUserId = req.auth?.userId;
+      const authUserId = req.auth?.userId;
 
-      if (!clerkUserId) {
+      if (!authUserId) {
         return res.status(401).json({ error: 'Not authenticated' });
       }
 
@@ -142,7 +136,7 @@ export class SessionController {
 
       let credits: CreditState;
       try {
-        credits = await creditService.ensureDailyCredits(clerkUserId);
+        credits = await creditService.ensureDailyCredits(authUserId, req.auth?.roles);
       } catch (error) {
         if (error instanceof CreditError) {
           return res.status(error.status).json({ error: error.message });
@@ -150,12 +144,12 @@ export class SessionController {
         throw error;
       }
 
-      const guestName = await this.resolveClerkFullName(clerkUserId);
+      const guestName = this.resolveDisplayName(req);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
         guestName,
-        clerkUserId
+        authUserId
       );
 
       if (!req.session.guestSessions) {
@@ -226,19 +220,19 @@ export class SessionController {
         let guest = await sessionService.getGuestById(guestData.guestId);
 
         if (guest) {
-          // Keep name in sync if it changed outside this session
-          const clerkUserId = req.auth?.userId;
-          if (clerkUserId) {
-            const latestName = await this.resolveClerkFullName(clerkUserId);
+          // If the request body contains a displayName, sync it
+          const authUserId = req.auth?.userId;
+          if (authUserId && req.body?.displayName) {
+            const latestName = req.body.displayName.trim();
             if (latestName && latestName !== guest.name) {
-              guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName, clerkUserId);
+              guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName, authUserId);
             }
           }
 
           let credits: CreditState | undefined;
-          if (clerkUserId) {
+          if (authUserId) {
             try {
-              credits = await creditService.ensureDailyCredits(clerkUserId);
+              credits = await creditService.ensureDailyCredits(authUserId, req.auth?.roles);
             } catch (error) {
               if (error instanceof CreditError) {
                 return res.status(error.status).json({ error: error.message });
@@ -347,17 +341,17 @@ export class SessionController {
       const { id } = req.params;
       const hostId = req.session.userId!;
       const body = (req.body ?? {}) as {
-        clerkUserId?: string;
+        userId?: string;
         amount?: number;
         increaseTotal?: boolean;
         newTotal?: number;
         refill?: boolean;
       };
 
-      const { clerkUserId, amount, increaseTotal, newTotal, refill } = body;
+      const { userId: targetUserId, amount, increaseTotal, newTotal, refill } = body;
 
-      if (!clerkUserId || typeof clerkUserId !== 'string') {
-        return res.status(400).json({ error: 'clerkUserId is required' });
+      if (!targetUserId || typeof targetUserId !== 'string') {
+        return res.status(400).json({ error: 'userId is required' });
       }
 
       const session = await sessionService.getSession(id);
@@ -377,7 +371,7 @@ export class SessionController {
           return res.status(400).json({ error: 'newTotal must be a positive number' });
         }
 
-        const credits = await creditService.setTotalCredits(clerkUserId, normalizedTotal, { refill });
+        const credits = await creditService.setTotalCredits(targetUserId, normalizedTotal, { refill });
         return res.json({ credits });
       }
 
@@ -385,7 +379,7 @@ export class SessionController {
         return res.status(400).json({ error: 'amount must be a positive number' });
       }
 
-      const credits = await creditService.addCredits(clerkUserId, Math.floor(amount), {
+      const credits = await creditService.addCredits(targetUserId, Math.floor(amount), {
         increaseTotal: Boolean(increaseTotal),
       });
 

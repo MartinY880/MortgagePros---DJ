@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { isEmbedded, getIframeToken } from './iframeAuth';
+import { getLogtoAccessToken } from './logtoTokenStore';
 
 let apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
 let socketBaseUrl = import.meta.env.VITE_SOCKET_URL || null;
@@ -36,52 +36,14 @@ export function getSocketUrl() {
   return deriveSocketUrl();
 }
 
-declare global {
-  interface Window {
-    Clerk?: {
-      session?: {
-        getToken: (options?: { template?: string }) => Promise<string | null>;
-      };
-    };
-  }
-}
-
-const clerkTokenWithTimeout = async (ms = 3000): Promise<string | null> => {
-  const getter = window.Clerk?.session?.getToken();
-  if (!getter) return null;
-
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), ms);
-  });
-
-  try {
-    const result = await Promise.race([getter, timeout]);
-    return result ?? null;
-  } finally {
-    clearTimeout(timer!);
-  }
-};
-
 api.interceptors.request.use(async (config) => {
   if (typeof window !== 'undefined') {
-    // In iframe context, use the HMAC iframe token instead of Clerk JWT
-    if (isEmbedded()) {
-      const iframeToken = getIframeToken();
-      if (iframeToken) {
-        config.headers = config.headers ?? {};
-        config.headers.Authorization = `IframeToken ${iframeToken}`;
-      }
-      return config;
-    }
-
-    // Normal (non-iframe) context: use Clerk JWT
     let token: string | null = null;
 
     try {
-      token = await clerkTokenWithTimeout();
+      token = await getLogtoAccessToken();
     } catch (error) {
-      console.warn('Failed to retrieve Clerk token:', error);
+      console.warn('Failed to retrieve Logto token:', error);
     }
 
     if (token) {
@@ -93,12 +55,62 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+/**
+ * Response interceptor – circuit-breaker for auth errors.
+ * After seeing consecutive 401s we back off so an expired-token
+ * situation doesn't generate a request storm.
+ */
+let consecutive401s = 0;
+let circuitBreakerTrippedAt = 0;
+const MAX_CONSECUTIVE_401 = 3;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 30_000; // auto-reset after 30 s
+
+api.interceptors.response.use(
+  (response) => {
+    // Successful response → reset the 401 counter
+    consecutive401s = 0;
+    return response;
+  },
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      consecutive401s++;
+      if (consecutive401s >= MAX_CONSECUTIVE_401) {
+        circuitBreakerTrippedAt = Date.now();
+        console.warn(
+          `Auth circuit-breaker: ${consecutive401s} consecutive 401s – suppressing further requests for ${CIRCUIT_BREAKER_COOLDOWN_MS / 1000}s`,
+        );
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+/**
+ * Request interceptor – honour the circuit-breaker.
+ * When the 401 circuit-breaker has tripped we reject the request
+ * immediately (without hitting the network) to prevent request storms.
+ * The breaker auto-resets after the cooldown period.
+ */
+api.interceptors.request.use((config) => {
+  if (consecutive401s >= MAX_CONSECUTIVE_401) {
+    // Auto-reset after cooldown
+    if (Date.now() - circuitBreakerTrippedAt > CIRCUIT_BREAKER_COOLDOWN_MS) {
+      consecutive401s = 0;
+      return config;
+    }
+    // Let /auth/ requests through so the user can re-authenticate
+    const url = config.url ?? '';
+    if (!url.startsWith('/auth')) {
+      return Promise.reject(new Error('Auth circuit-breaker: too many consecutive 401s'));
+    }
+  }
+  return config;
+});
+
 export const authApi = {
   getAuthUrl: () => api.get('/auth/login'),
   getMe: () => api.get('/auth/me'),
   logout: () => api.post('/auth/logout'),
-  getIframeToken: () =>
-    api.post<{ token: string }>('/auth/iframe-token'),
 };
 
 export const sessionApi = {
@@ -112,7 +124,7 @@ export const sessionApi = {
   updateSettings: (id: string, payload: { allowExplicit?: boolean; maxSongDuration?: number }) => 
     api.post(`/sessions/${id}/settings`, payload),
   adjustGuestCredits: (id: string, payload: {
-    clerkUserId: string;
+    userId: string;
     amount?: number;
     increaseTotal?: boolean;
     newTotal?: number;
@@ -160,8 +172,6 @@ export const spotifyApi = {
   play: () => api.post('/spotify/play'),
   pause: () => api.post('/spotify/pause'),
   next: (sessionId: string) => api.post('/spotify/next', { sessionId }),
-  getPlaylists: () => api.get('/spotify/playlists'),
-  startPlaylist: (playlistUri: string) => api.post('/spotify/playlist/start', { playlistUri }),
 };
 
 export const bannedTracksApi = {
@@ -195,10 +205,10 @@ export const bannedTracksApi = {
 };
 
 export const guestApi = {
-  joinByCode: (code: string) =>
-    api.post(`/sessions/code/${code}/join`),
-  joinById: (sessionId: string) =>
-    api.post(`/sessions/${sessionId}/join`),
+  joinByCode: (code: string, displayName?: string) =>
+    api.post(`/sessions/code/${code}/join`, { displayName }),
+  joinById: (sessionId: string, displayName?: string) =>
+    api.post(`/sessions/${sessionId}/join`, { displayName }),
 };
 
 export const leaderboardApi = {

@@ -66,11 +66,19 @@ export class WebPlaybackService {
   private initializePromise: Promise<void> | null = null;
 
   constructor() {
-    // Set up SDK ready callback
+    // Set up SDK ready callback.
+    // The SDK script is loaded in index.html with a pre-defined callback that
+    // sets window.__spotifySDKReady = true.  If the SDK already fired before
+    // this constructor runs, we pick up that flag.  Otherwise we (re-)assign
+    // the callback so it sets our instance field directly.
     if (typeof window !== 'undefined') {
-      window.onSpotifyWebPlaybackSDKReady = () => {
+      if ((window as any).__spotifySDKReady && window.Spotify) {
         this.sdkReady = true;
-      };
+      } else {
+        window.onSpotifyWebPlaybackSDKReady = () => {
+          this.sdkReady = true;
+        };
+      }
     }
   }
 

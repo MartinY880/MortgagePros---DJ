@@ -1,13 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { SWRConfig } from 'swr';
-import { ClerkProvider } from '@clerk/clerk-react';
+import { LogtoProvider, LogtoConfig, UserScope } from '@logto/react';
 import App from './App';
 import './index.css';
 import { apiFetcher } from './hooks/useApiSWR';
 import { loadAppConfig } from './config/appConfig';
 import { configureFrontendApi } from './services/api';
 import { AppConfigContext } from './context/AppConfigContext';
+import { IframeAuthProvider } from './context/IframeAuthContext';
+import LogtoTokenSync from './components/LogtoTokenSync';
 
 const rootElement = document.getElementById('root');
 
@@ -24,20 +26,31 @@ async function bootstrap() {
       socketUrl: appConfig.socketUrl,
     });
 
+    const logtoConfig: LogtoConfig = {
+      endpoint: appConfig.logtoEndpoint,
+      appId: appConfig.logtoAppId,
+      scopes: [UserScope.Email, UserScope.Profile],
+      resources: [appConfig.logtoApiResource],
+    };
+
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
-        <ClerkProvider publishableKey={appConfig.clerkPublishableKey} afterSignOutUrl="/">
-          <AppConfigContext.Provider value={appConfig}>
-            <SWRConfig
-              value={{
-                fetcher: apiFetcher,
-                revalidateOnFocus: false,
-              }}
-            >
-              <App />
-            </SWRConfig>
-          </AppConfigContext.Provider>
-        </ClerkProvider>
+        <LogtoProvider config={logtoConfig}>
+          <LogtoTokenSync apiResource={appConfig.logtoApiResource} />
+          <IframeAuthProvider>
+            <AppConfigContext.Provider value={appConfig}>
+              <SWRConfig
+                value={{
+                  fetcher: apiFetcher,
+                  revalidateOnFocus: false,
+                  shouldRetryOnError: false,
+                }}
+              >
+                <App />
+              </SWRConfig>
+            </AppConfigContext.Provider>
+          </IframeAuthProvider>
+        </LogtoProvider>
       </React.StrictMode>,
     );
   } catch (error) {

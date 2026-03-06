@@ -2,11 +2,11 @@
  * Iframe authentication service.
  *
  * Manages a long-lived HMAC-signed token for API auth when the DJ app
- * runs inside a cross-origin iframe. Clerk's client-side SDK cannot
+ * runs inside a cross-origin iframe. The auth SDK cannot
  * establish a session in this context due to third-party cookie
  * restrictions, so we bypass it entirely:
  *
- * 1. A popup window authenticates with Clerk (works — top-level context)
+ * 1. A popup window authenticates with Logto (works — top-level context)
  * 2. The popup calls POST /api/auth/iframe-token to get an HMAC token
  * 3. The popup sends the token to the iframe via postMessage
  * 4. The iframe stores the token in localStorage so the user stays

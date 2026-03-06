@@ -4,12 +4,14 @@ import { LogOut, Plus, Users } from 'lucide-react';
 import { authApi, sessionApi } from '../services/api';
 import { User, Session } from '../types';
 import { useApiSWR } from '../hooks/useApiSWR';
-import { useClerk, useUser } from '@clerk/clerk-react';
+import { useLogto } from '@logto/react';
+import { useIframeAuth, isEmbedded } from '../context/IframeAuthContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { isLoaded: isUserLoaded, isSignedIn } = useUser();
-  const { openSignIn, signOut } = useClerk();
+  const { isAuthenticated: isLogtoAuth, isLoading: isAuthLoading, signIn, signOut } = useLogto();
+  const iframeAuth = useIframeAuth();
+  const isAuthenticated = isLogtoAuth || iframeAuth.isAuthenticated;
   const [sessionName, setSessionName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [allowExplicit, setAllowExplicit] = useState(true);
@@ -18,7 +20,7 @@ export default function Dashboard() {
   const [resumeError, setResumeError] = useState<string | null>(null);
 
   const { data: userData, error: userError, isLoading: userLoading } = useApiSWR<{ user: User }>(
-    isSignedIn ? '/auth/me' : null,
+    isAuthenticated ? '/auth/me' : null,
     {
       shouldRetryOnError: false,
     }
@@ -75,8 +77,7 @@ export default function Dashboard() {
   const handleLogout = async () => {
     try {
       await authApi.logout();
-      await signOut({ redirectUrl: '/' });
-      navigate('/');
+      void signOut(window.location.origin);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -103,7 +104,7 @@ export default function Dashboard() {
     }
   };
 
-  if (!isUserLoaded) {
+  if (isAuthLoading || iframeAuth.isWaitingForParent) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
         <div className="text-white text-xl">Loading account...</div>
@@ -111,24 +112,27 @@ export default function Dashboard() {
     );
   }
 
-  if (!isSignedIn) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
         <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
           <h2 className="text-2xl font-bold text-white">Sign in to manage sessions</h2>
           <p className="text-gray-300 text-sm">
-            Connect with Clerk to create or join sessions.
+            {isEmbedded
+              ? 'Please sign in on the main site to access the dashboard.'
+              : 'Sign in to create or join sessions.'}
           </p>
-          <button
-            onClick={() => {
-              void openSignIn({
-                forceRedirectUrl: window.location.href,
-              });
-            }}
-            className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
-          >
-            Sign in with Clerk
-          </button>
+          {!isEmbedded && (
+            <button
+              onClick={() => {
+                sessionStorage.setItem('logto_post_login_redirect', '/dashboard');
+                void signIn(`${window.location.origin}/callback`);
+              }}
+              className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </div>
     );

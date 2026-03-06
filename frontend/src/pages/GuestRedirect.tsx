@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useUser } from '@clerk/clerk-react';
+import { useLogto } from '@logto/react';
 import { sessionApi } from '../services/api';
+import { useIframeAuth, isEmbedded } from '../context/IframeAuthContext';
 
 export default function GuestRedirect() {
   const { sessionCode } = useParams<{ sessionCode: string }>();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const { isLoaded, isSignedIn } = useUser();
+  const { isAuthenticated: isLogtoAuth, isLoading, signIn } = useLogto();
+  const { isAuthenticated: isIframeAuth, isWaitingForParent } = useIframeAuth();
+  const isAuthenticated = isLogtoAuth || isIframeAuth;
 
   useEffect(() => {
     let active = true;
@@ -18,18 +21,18 @@ export default function GuestRedirect() {
         return;
       }
 
-      if (!isLoaded) {
+      if (isLoading || isWaitingForParent) {
         return;
       }
 
-      if (!isSignedIn) {
-        navigate('/', {
-          replace: true,
-          state: {
-            requireSignIn: true,
-            redirectTo: `/join/${sessionCode}`,
-          },
-        });
+      if (!isAuthenticated) {
+        if (isEmbedded) {
+          // In iframe mode wait for parent to supply token — don't redirect
+          return;
+        }
+        // Redirect to Logto sign-in, then come back to /join/:code
+        sessionStorage.setItem('logto_post_login_redirect', `/join/${sessionCode}`);
+        void signIn(`${window.location.origin}/callback`);
         return;
       }
 
@@ -57,7 +60,7 @@ export default function GuestRedirect() {
     return () => {
       active = false;
     };
-  }, [sessionCode, navigate, isLoaded, isSignedIn]);
+  }, [sessionCode, navigate, isLoading, isAuthenticated, signIn, isWaitingForParent]);
 
   if (error) {
     return (

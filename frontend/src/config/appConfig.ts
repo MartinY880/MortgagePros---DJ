@@ -1,7 +1,9 @@
 export interface AppConfig {
   apiBaseUrl: string;
   socketUrl: string;
-  clerkPublishableKey: string;
+  logtoEndpoint: string;
+  logtoAppId: string;
+  logtoApiResource: string;
 }
 
 let cachedConfig: AppConfig | null = null;
@@ -60,16 +62,20 @@ export async function loadAppConfig(): Promise<AppConfig> {
 
   const apiBaseUrl = data.apiBaseUrl ? normalizeUrl(data.apiBaseUrl) : '/api';
   const socketUrl = data.socketUrl ? normalizeUrl(data.socketUrl) : deriveSocketUrl(apiBaseUrl);
-  const clerkPublishableKey = data.clerkPublishableKey;
+  const logtoEndpoint = data.logtoEndpoint;
+  const logtoAppId = data.logtoAppId;
+  const logtoApiResource = data.logtoApiResource;
 
-  if (!clerkPublishableKey) {
-    throw new Error('Missing Clerk publishable key in application configuration');
+  if (!logtoEndpoint || !logtoAppId || !logtoApiResource) {
+    throw new Error('Missing Logto configuration in application config');
   }
 
   cachedConfig = {
     apiBaseUrl,
     socketUrl,
-    clerkPublishableKey,
+    logtoEndpoint,
+    logtoAppId,
+    logtoApiResource,
   };
 
   if (typeof window !== 'undefined') {

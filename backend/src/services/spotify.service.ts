@@ -23,8 +23,6 @@ export class SpotifyService {
       'streaming',
       'user-read-email',
       'user-read-private',
-      'playlist-read-private',
-      'playlist-read-collaborative',
     ];
 
     return this.spotifyApi.createAuthorizeURL(scopes, 'state', true);
@@ -148,23 +146,6 @@ export class SpotifyService {
   async skipToNext(accessToken: string) {
     this.spotifyApi.setAccessToken(accessToken);
     await this.spotifyApi.skipToNext();
-  }
-
-  async getUserPlaylists(accessToken: string, limit = 50) {
-    this.spotifyApi.setAccessToken(accessToken);
-    const data = await this.spotifyApi.getUserPlaylists({ limit });
-    return data.body.items || [];
-  }
-
-  async getPlaylistTracks(playlistId: string, accessToken: string) {
-    this.spotifyApi.setAccessToken(accessToken);
-    const data = await this.spotifyApi.getPlaylistTracks(playlistId);
-    return data.body.items || [];
-  }
-
-  async startPlaylist(playlistUri: string, accessToken: string) {
-    this.spotifyApi.setAccessToken(accessToken);
-    await this.spotifyApi.play({ context_uri: playlistUri });
   }
 
   async ensureValidToken(userId: string): Promise<string> {

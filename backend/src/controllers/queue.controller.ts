@@ -91,7 +91,7 @@ export class QueueController {
       const { session, actor, role } = context;
       const allowExplicit = (session as any).allowExplicit ?? true;
       const queuedBefore = await queueService.countActiveQueueItems(sessionId);
-      const clerkUserId = req.auth?.userId ?? null;
+      const authUserId = req.auth?.userId ?? null;
       let guestCreditState: CreditState | null = null;
 
       playbackService.ensureMonitor(sessionId, session.hostId);
@@ -105,15 +105,15 @@ export class QueueController {
       }
 
       if (role === 'guest') {
-        if (!clerkUserId) {
+        if (!authUserId) {
           return res.status(401).json({ error: 'Not authenticated' });
         }
 
         try {
-          guestCreditState = await creditService.spendCredits(clerkUserId, GUEST_TRACK_COST);
+          guestCreditState = await creditService.spendCredits(authUserId, GUEST_TRACK_COST, req.auth?.roles);
           (req as any)._spentCreditsForQueue = {
             amount: GUEST_TRACK_COST,
-            clerkUserId,
+            authUserId,
           };
         } catch (error) {
           if (error instanceof CreditError) {
@@ -175,10 +175,10 @@ export class QueueController {
         return res.status(error.status).json({ error: error.message });
       }
 
-      const spentInfo = (req as any)._spentCreditsForQueue as { amount: number; clerkUserId: string } | undefined;
+      const spentInfo = (req as any)._spentCreditsForQueue as { amount: number; authUserId: string } | undefined;
       if (spentInfo) {
         try {
-          await creditService.addCredits(spentInfo.clerkUserId, spentInfo.amount);
+          await creditService.addCredits(spentInfo.authUserId, spentInfo.amount);
         } catch (refundError) {
           console.error('Failed to refund credits after queue error:', refundError);
         } finally {
@@ -235,22 +235,23 @@ export class QueueController {
 
       const queueItemData = queueItem as any;
       let actorCredits: CreditState | null = null;
-      const removingClerkUserId = req.auth?.userId;
-      let guestClerkUserId = queueItemData.addedByGuest?.clerkUserId ?? null;
+      const removingAuthUserId = req.auth?.userId;
+      // clerkUserId is the DB column name (kept for migration compat); stores Logto user ID
+      let guestAuthUserId = queueItemData.addedByGuest?.clerkUserId ?? null;
 
-      if (!guestClerkUserId && queueItem.addedByGuestId) {
+      if (!guestAuthUserId && queueItem.addedByGuestId) {
         try {
           const guestRecord = await sessionService.getGuestById(queueItem.addedByGuestId);
-          guestClerkUserId = guestRecord?.clerkUserId ?? null;
+          guestAuthUserId = guestRecord?.clerkUserId ?? null;
         } catch (lookupError) {
-          console.error('Failed to resolve guest Clerk ID for refund:', lookupError);
+          console.error('Failed to resolve guest user ID for refund:', lookupError);
         }
       }
 
-      if (guestClerkUserId) {
+      if (guestAuthUserId) {
         try {
-          const credits = await creditService.addCredits(guestClerkUserId, GUEST_TRACK_COST);
-          if (removingClerkUserId && removingClerkUserId === guestClerkUserId) {
+          const credits = await creditService.addCredits(guestAuthUserId, GUEST_TRACK_COST);
+          if (removingAuthUserId && removingAuthUserId === guestAuthUserId) {
             actorCredits = credits;
           }
         } catch (refundError) {
@@ -282,7 +283,7 @@ export class QueueController {
   };
 
   vote = async (req: Request, res: Response) => {
-    let spentVoteCredits: { amount: number; clerkUserId: string } | null = null;
+    let spentVoteCredits: { amount: number; authUserId: string } | null = null;
 
     try {
       const { queueItemId } = req.params;
@@ -307,34 +308,35 @@ export class QueueController {
 
       const { actor, role } = context;
 
-      let clerkUserId: string | null = null;
+      let authUserId: string | null = null;
       let actorCredits: CreditState | null = null;
 
       if (role === 'host') {
-        clerkUserId = req.auth?.userId ?? null;
+        authUserId = req.auth?.userId ?? null;
       } else if (role === 'guest' && actor.guestId) {
         const guest = await sessionService.getGuestById(actor.guestId);
-        clerkUserId = guest?.clerkUserId ?? null;
+        // clerkUserId is the DB column name; stores Logto user ID
+        authUserId = guest?.clerkUserId ?? null;
       }
 
       const result = await queueService.vote(queueItemId, actor, voteType, {
         beforeChange: async (intent) => {
-          if (!clerkUserId || intent.action !== 'add') {
+          if (!authUserId || intent.action !== 'add') {
             return;
           }
 
-          const credits = await creditService.spendCredits(clerkUserId, VOTE_REACTION_COST);
-          spentVoteCredits = { amount: VOTE_REACTION_COST, clerkUserId };
+          const credits = await creditService.spendCredits(authUserId, VOTE_REACTION_COST);
+          spentVoteCredits = { amount: VOTE_REACTION_COST, authUserId };
 
-          if (clerkUserId === req.auth?.userId) {
+          if (authUserId === req.auth?.userId) {
             actorCredits = credits;
           }
         },
       });
 
-      if (result.action === 'removed' && clerkUserId) {
-        const credits = await creditService.addCredits(clerkUserId, VOTE_REACTION_COST);
-        if (clerkUserId === req.auth?.userId) {
+      if (result.action === 'removed' && authUserId) {
+        const credits = await creditService.addCredits(authUserId, VOTE_REACTION_COST);
+        if (authUserId === req.auth?.userId) {
           actorCredits = credits;
         }
       }
@@ -359,7 +361,7 @@ export class QueueController {
       console.error('Vote error:', error);
 
       if (spentVoteCredits) {
-        const { clerkUserId: refundUserId, amount } = spentVoteCredits;
+        const { authUserId: refundUserId, amount } = spentVoteCredits;
         try {
           await creditService.addCredits(refundUserId, amount);
         } catch (refundError) {

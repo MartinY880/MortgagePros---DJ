@@ -7,7 +7,9 @@ router.get('/', (_req, res) => {
   res.json({
     apiBaseUrl: config.frontend.apiBaseUrl,
     socketUrl: config.frontend.socketUrl,
-    clerkPublishableKey: config.frontend.clerkPublishableKey,
+    logtoEndpoint: config.frontend.logtoEndpoint,
+    logtoAppId: config.frontend.logtoAppId,
+    logtoApiResource: config.frontend.logtoApiResource,
   });
 });
 

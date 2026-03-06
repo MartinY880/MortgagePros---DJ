@@ -1,50 +1,20 @@
 import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { authApi, guestApi } from '../services/api';
 import { Session } from '../types';
-import { useClerk, useUser } from '@clerk/clerk-react';
-import { isEmbedded, isIframeAuthenticated, onIframeAuthChange } from '../services/iframeAuth';
-import EmbeddedSignIn from '../components/EmbeddedSignIn';
-
-type LandingLocationState = {
-  requireSignIn?: boolean;
-  redirectTo?: string;
-} | null;
-
-const resolveAfterAuthUrl = (path?: string) => {
-  if (!path) {
-    return window.location.href;
-  }
-
-  if (/^https?:\/\//i.test(path)) {
-    return path;
-  }
-
-  return `${window.location.origin}${path.startsWith('/') ? path : `/${path}`}`;
-};
+import { useLogto } from '@logto/react';
+import { useIframeAuth, isEmbedded } from '../context/IframeAuthContext';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const locationState = (location.state as LandingLocationState) ?? null;
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'host' | 'guest' | null>(null);
-  const [handledAuthRedirect, setHandledAuthRedirect] = useState(false);
-  const { isLoaded, isSignedIn } = useUser();
-  const { openSignIn, signOut } = useClerk();
+  const { isAuthenticated: isLogtoAuth, isLoading, signIn, signOut, getIdTokenClaims } = useLogto();
+  const iframeAuth = useIframeAuth();
+  const isAuthenticated = isLogtoAuth || iframeAuth.isAuthenticated;
   const [loggingOut, setLoggingOut] = useState(false);
-  const [showEmbeddedSignIn, setShowEmbeddedSignIn] = useState(false);
-  const [iframeAuthed, setIframeAuthed] = useState(isIframeAuthenticated());
-
-  // Subscribe to iframe auth changes (token received from popup)
-  useEffect(() => {
-    return onIframeAuthChange(() => setIframeAuthed(isIframeAuthenticated()));
-  }, []);
-
-  // In iframe context, auth can come from the iframe token instead of Clerk
-  const isAuthenticated = isSignedIn || (isEmbedded() && iframeAuthed);
 
   const startSpotifyConnect = useCallback(async () => {
     try {
@@ -72,7 +42,9 @@ export default function LandingPage() {
     setJoinError(null);
 
     try {
-      const response = await guestApi.joinByCode(joinCode.toUpperCase());
+      const claims = await getIdTokenClaims();
+      const displayName = claims?.name || iframeAuth.displayName || undefined;
+      const response = await guestApi.joinByCode(joinCode.toUpperCase(), displayName);
       const session: Session = response.data.session;
       setJoinCode('');
       navigate(`/session/${session.id}`);
@@ -83,8 +55,9 @@ export default function LandingPage() {
     } finally {
       setJoining(false);
     }
-  }, [joinCode, navigate]);
+  }, [joinCode, navigate, getIdTokenClaims]);
 
+  // After auth completes, execute pending action
   useEffect(() => {
     if (!pendingAction || !isAuthenticated) {
       return;
@@ -103,7 +76,7 @@ export default function LandingPage() {
     };
 
     void run();
-  }, [pendingAction, isSignedIn, startSpotifyConnect, attemptGuestJoin]);
+  }, [pendingAction, isAuthenticated, startSpotifyConnect, attemptGuestJoin]);
 
   const handleLogout = async () => {
     if (loggingOut) {
@@ -118,45 +91,39 @@ export default function LandingPage() {
       console.error('Logout request failed:', error);
     } finally {
       try {
-        await signOut({ redirectUrl: '/' });
+        void signOut(window.location.origin);
       } catch (error) {
-        console.error('Clerk sign-out failed:', error);
+        console.error('Logto sign-out failed:', error);
       }
       setLoggingOut(false);
     }
   };
 
-  const promptClerkSignIn = async (action: 'host' | 'guest', redirectPath?: string) => {
-    if (!isLoaded) {
+  const promptSignIn = (action: 'host' | 'guest', redirectPath?: string) => {
+    if (isLoading) {
       return;
     }
 
-    // Clerk sign-in modals/redirects crash inside iframes — show inline form instead
-    if (isEmbedded()) {
-      setPendingAction(action);
-      setShowEmbeddedSignIn(true);
-      return;
-    }
-
+    // In iframe mode, the parent provides auth — no redirect needed.
+    // If we somehow get here without auth, just set the pending action
+    // and wait for the parent's token.
     setPendingAction(action);
 
-    try {
-      await openSignIn({
-        forceRedirectUrl: resolveAfterAuthUrl(redirectPath),
-      });
-    } catch (error) {
-      console.error('Clerk sign-in aborted:', error);
-      setPendingAction(null);
+    if (isEmbedded) {
+      return;
     }
+
+    sessionStorage.setItem('logto_post_login_redirect', redirectPath || '/');
+    void signIn(`${window.location.origin}/callback`);
   };
 
   const handleLogin = async () => {
-    if (!isLoaded) {
+    if (isLoading) {
       return;
     }
 
     if (!isAuthenticated) {
-      await promptClerkSignIn('host');
+      promptSignIn('host');
       return;
     }
 
@@ -168,83 +135,22 @@ export default function LandingPage() {
       return;
     }
 
-    if (!isLoaded) {
+    if (isLoading) {
       return;
     }
 
     if (!isAuthenticated) {
-      await promptClerkSignIn('guest');
+      promptSignIn('guest');
       return;
     }
 
     await attemptGuestJoin();
   };
 
-  useEffect(() => {
-    if (!isLoaded || handledAuthRedirect) {
-      return;
-    }
-
-    const redirectRequest = locationState;
-
-    if (!redirectRequest?.requireSignIn) {
-      return;
-    }
-
-    // Don't trigger Clerk sign-in inside iframes
-    if (isEmbedded()) {
-      return;
-    }
-
-    const targetUrl = resolveAfterAuthUrl(redirectRequest.redirectTo);
-
-    const run = async () => {
-      setHandledAuthRedirect(true);
-
-      try {
-        await openSignIn({
-          forceRedirectUrl: targetUrl,
-        });
-      } catch (error) {
-        console.error('Clerk sign-in aborted:', error);
-        setHandledAuthRedirect(false);
-      } finally {
-        navigate(location.pathname, { replace: true, state: null });
-      }
-    };
-
-    void run();
-  }, [handledAuthRedirect, isLoaded, location.pathname, locationState, navigate, openSignIn]);
-
-  useEffect(() => {
-    if (!locationState?.requireSignIn && handledAuthRedirect) {
-      setHandledAuthRedirect(false);
-    }
-  }, [handledAuthRedirect, locationState]);
-
-  if (showEmbeddedSignIn && isEmbedded() && !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <button
-            onClick={() => {
-              setShowEmbeddedSignIn(false);
-              setPendingAction(null);
-            }}
-            className="text-gray-400 hover:text-white mb-4 text-sm transition"
-          >
-            ← Back
-          </button>
-          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
-        {isLoaded && isAuthenticated && (
+        {!isLoading && isAuthenticated && (
           <div className="flex justify-end mb-4">
             <button
               onClick={handleLogout}
@@ -287,7 +193,7 @@ export default function LandingPage() {
         <div className="mt-10 bg-spotify-gray bg-opacity-60 border border-spotify-gray/60 rounded-2xl p-6 text-left">
           <h2 className="text-2xl font-bold text-white mb-2">Join a Session as a Guest</h2>
           <p className="text-gray-300 text-sm mb-4">
-            Have a session code? Sign in with Clerk, and we&apos;ll use your full name to let everyone know who&apos;s adding tracks.
+            Have a session code? Sign in and we&apos;ll use your name to let everyone know who&apos;s adding tracks.
           </p>
 
           <div>

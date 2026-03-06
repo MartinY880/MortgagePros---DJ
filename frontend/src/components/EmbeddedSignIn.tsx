@@ -4,11 +4,11 @@ import { setIframeToken } from '../services/iframeAuth';
 /**
  * Sign-in component for iframe context.
  *
- * Opens a popup window where the user completes Microsoft OAuth via
- * Clerk in a first-party (top-level) context. After sign-in, the popup
+ * Opens a popup window where the user completes authentication via
+ * Logto in a first-party (top-level) context. After sign-in, the popup
  * fetches a long-lived HMAC token from the backend and sends it here
  * via postMessage. We store the token in memory and notify the parent
- * that auth is complete — no Clerk client-side SDK required in the iframe.
+ * that auth is complete — no auth SDK required in the iframe.
  */
 export default function EmbeddedSignIn({ onAuthenticated, autoOpen = false }: { onAuthenticated?: () => void; autoOpen?: boolean }) {
   const [error, setError] = useState('');
@@ -60,7 +60,7 @@ export default function EmbeddedSignIn({ onAuthenticated, autoOpen = false }: { 
 
     const popup = window.open(
       `${window.location.origin}/auth/popup`,
-      'clerk-signin-popup',
+      'logto-signin-popup',
       `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`,
     );
 
@@ -93,14 +93,7 @@ export default function EmbeddedSignIn({ onAuthenticated, autoOpen = false }: { 
         disabled={loading}
         className="w-full flex items-center justify-center gap-3 bg-[#2f2f2f] hover:bg-[#3a3a3a] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition border border-gray-600"
       >
-        {/* Microsoft logo */}
-        <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-          <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-          <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-          <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-        </svg>
-        {loading ? 'Signing in…' : 'Sign in with Microsoft'}
+        {loading ? 'Signing in…' : 'Sign In'}
       </button>
 
       {error && (

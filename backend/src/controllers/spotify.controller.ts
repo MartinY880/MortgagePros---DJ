@@ -7,6 +7,36 @@ import { bannedTracksService } from '../services/bannedTracks.service';
 import { creditService, CreditError, CreditState, VOTE_REACTION_COST } from '../services/credit.service';
 import { skipCounterService } from '../services/skipCounter.service';
 
+/**
+ * Detect Spotify 429 rate-limit or network timeout errors and return
+ * an appropriate HTTP response instead of a generic 500.
+ * Returns `true` if the error was handled, `false` otherwise.
+ */
+function handleSpotifyTransientError(error: any, res: Response, label: string): boolean {
+  const statusCode = error?.statusCode ?? error?.response?.status ?? error?.status ?? error?.body?.statusCode;
+
+  if (statusCode === 429) {
+    const retryAfter = error?.retryAfter
+      ?? error?.headers?.['retry-after']
+      ?? error?.response?.headers?.['retry-after']
+      ?? error?.body?.retry_after
+      ?? '1';
+    console.warn(`${label}: Spotify 429 – retry-after ${retryAfter}s`);
+    res.set('Retry-After', String(retryAfter));
+    res.status(429).json({ error: 'Spotify rate limit – please try again shortly', retryAfter: Number(retryAfter) || 1 });
+    return true;
+  }
+
+  const code = error?.code ?? error?.cause?.code;
+  if (code === 'ETIMEDOUT' || code === 'ENETUNREACH' || code === 'ECONNRESET') {
+    console.warn(`${label}: Spotify network error (${code})`);
+    res.status(503).json({ error: 'Spotify is temporarily unreachable – please try again' });
+    return true;
+  }
+
+  return false;
+}
+
 export class SpotifyController {
   async getPlaybackToken(req: Request, res: Response) {
     try {
@@ -18,50 +48,10 @@ export class SpotifyController {
 
       const accessToken = await spotifyService.ensureValidToken(userId);
       res.json({ accessToken });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Get playback token')) return;
       console.error('Get playback token error:', error);
       res.status(500).json({ error: 'Failed to get playback token' });
-    }
-  }
-
-  async getUserPlaylists(req: Request, res: Response) {
-    try {
-      const userId = req.session.userId;
-
-      if (!userId) {
-        return res.status(401).json({ error: 'Not authenticated' });
-      }
-
-      const accessToken = await spotifyService.ensureValidToken(userId);
-      const playlists = await spotifyService.getUserPlaylists(accessToken);
-      
-      res.json({ playlists });
-    } catch (error) {
-      console.error('Get playlists error:', error);
-      res.status(500).json({ error: 'Failed to get playlists' });
-    }
-  }
-
-  async startPlaylist(req: Request, res: Response) {
-    try {
-      const userId = req.session.userId!;
-      const { playlistUri } = req.body;
-
-      if (!playlistUri) {
-        return res.status(400).json({ error: 'playlistUri is required' });
-      }
-
-      const accessToken = await spotifyService.ensureValidToken(userId);
-      
-      await spotifyService.startPlaylist(
-        playlistUri,
-        accessToken
-      );
-
-      res.json({ message: 'Playlist started' });
-    } catch (error) {
-      console.error('Start playlist error:', error);
-      res.status(500).json({ error: 'Failed to start playlist' });
     }
   }
 
@@ -184,7 +174,8 @@ export class SpotifyController {
           filteredOutCount,
         },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Search')) return;
       console.error('Search error:', error);
       res.status(500).json({ error: 'Failed to search tracks' });
     }
@@ -242,7 +233,8 @@ export class SpotifyController {
       }
 
       res.json({ artists, bannedArtistIds });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Artist search')) return;
       console.error('Artist search error:', error);
       res.status(500).json({ error: 'Failed to search artists' });
     }
@@ -317,7 +309,8 @@ export class SpotifyController {
 
       // Return playback state (may be null if no active playback)
       res.json({ playback: playback || null, requester, skip: skipState });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Get playback')) return;
       console.error('Get playback error:', error);
       // Return null playback instead of error to prevent "unavailable" message
       res.json({ playback: null, requester: null });
@@ -332,7 +325,8 @@ export class SpotifyController {
       await spotifyService.play(accessToken);
 
       res.json({ message: 'Playing' });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Play')) return;
       console.error('Play error:', error);
       res.status(500).json({ error: 'Failed to play' });
     }
@@ -345,14 +339,15 @@ export class SpotifyController {
       await spotifyService.pause(accessToken);
 
       res.json({ message: 'Paused' });
-    } catch (error) {
+    } catch (error: any) {
+      if (handleSpotifyTransientError(error, res, 'Pause')) return;
       console.error('Pause error:', error);
       res.status(500).json({ error: 'Failed to pause' });
     }
   }
 
   async next(req: Request, res: Response) {
-    let spentSkipCredits: { amount: number; clerkUserId: string } | null = null;
+    let spentSkipCredits: { amount: number; authUserId: string } | null = null;
 
     try {
       const { sessionId } = req.body;
@@ -373,7 +368,7 @@ export class SpotifyController {
       }
 
       const isHost = req.session.userId === session.hostId;
-      let clerkUserId: string | null = null;
+      let authUserId: string | null = null;
       let actorCredits: CreditState | null = null;
 
       playbackService.ensureMonitor(sessionId, session.hostId);
@@ -390,6 +385,7 @@ export class SpotifyController {
       if (isHost) {
         await spotifyService.skipToNext(accessToken);
         const resetResult = await skipCounterService.reset(sessionId);
+        skipCounterService.resetGate(sessionId);
         playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
 
         return res.json({
@@ -417,33 +413,20 @@ export class SpotifyController {
         return res.status(401).json({ error: 'Join the session before skipping tracks' });
       }
 
+      // Sync the in-memory gate with the current track (cheap — skips DB if already in sync)
       await skipCounterService.syncCurrentTrack(sessionId, currentTrackId);
 
-      const alreadyVoted = await skipCounterService.hasGuestVoted(sessionId, currentTrackId, guest.id);
+      authUserId = req.auth?.userId ?? guest.clerkUserId ?? null;
 
-      if (alreadyVoted) {
-        const currentState = await skipCounterService.getState(sessionId);
-        return res.status(409).json({
-          error: 'You have already voted to skip this track',
-          skip: {
-            ...currentState,
-            triggered: false,
-            previousTrackId: null,
-          },
-        });
-      }
-
-      clerkUserId = req.auth?.userId ?? guest.clerkUserId ?? null;
-
-      if (!clerkUserId) {
-        return res.status(401).json({ error: 'Sign in with Clerk to spend credits on skip votes' });
+      if (!authUserId) {
+        return res.status(401).json({ error: 'Sign in to spend credits on skip votes' });
       }
 
       try {
-        const credits = await creditService.spendCredits(clerkUserId, VOTE_REACTION_COST);
-        spentSkipCredits = { amount: VOTE_REACTION_COST, clerkUserId };
+        const credits = await creditService.spendCredits(authUserId, VOTE_REACTION_COST, req.auth?.roles);
+        spentSkipCredits = { amount: VOTE_REACTION_COST, authUserId };
 
-        if (clerkUserId === req.auth?.userId) {
+        if (authUserId === req.auth?.userId) {
           actorCredits = credits;
         }
       } catch (error) {
@@ -455,11 +438,35 @@ export class SpotifyController {
 
       const voteResult = await skipCounterService.addVote(sessionId, currentTrackId, guest.id);
 
+      // Track changed between the playback fetch and the vote — refund and bail
+      if (voteResult.trackMismatch) {
+        if (spentSkipCredits) {
+          await creditService.addCredits(spentSkipCredits.authUserId, spentSkipCredits.amount);
+          spentSkipCredits = null;
+        }
+        return res.status(409).json({
+          error: 'The track changed before your skip vote was processed',
+          skip: { ...voteResult.state, triggered: false, previousTrackId: null },
+        });
+      }
+
+      // Threshold was already reached — song should skip momentarily, refund
+      if (voteResult.thresholdAlreadyReached) {
+        if (spentSkipCredits) {
+          await creditService.addCredits(spentSkipCredits.authUserId, spentSkipCredits.amount);
+          spentSkipCredits = null;
+        }
+        return res.status(409).json({
+          error: 'Enough skip votes have already been cast — the track is being skipped',
+          skip: { ...voteResult.state, triggered: false, previousTrackId: null },
+        });
+      }
+
       if (voteResult.alreadyVoted) {
-        const credits = await creditService.addCredits(clerkUserId, VOTE_REACTION_COST);
+        const credits = await creditService.addCredits(authUserId, VOTE_REACTION_COST);
         spentSkipCredits = null;
 
-        if (clerkUserId === req.auth?.userId) {
+        if (authUserId === req.auth?.userId) {
           actorCredits = credits;
         }
 
@@ -485,6 +492,7 @@ export class SpotifyController {
         try {
           await spotifyService.skipToNext(accessToken);
           const resetResult = await skipCounterService.reset(sessionId);
+          skipCounterService.resetGate(sessionId);
           playbackService.requestImmediateSync(sessionId, PLAYBACK_SKIP_POLL_DELAY_MS);
           spentSkipCredits = null;
 
@@ -525,11 +533,11 @@ export class SpotifyController {
       }
 
       return res.json(payload);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Next error:', error);
 
       if (spentSkipCredits) {
-        const { clerkUserId: refundUserId, amount } = spentSkipCredits;
+        const { authUserId: refundUserId, amount } = spentSkipCredits;
         try {
           await creditService.addCredits(refundUserId, amount);
         } catch (refundError) {
@@ -541,6 +549,8 @@ export class SpotifyController {
       if (error instanceof CreditError) {
         return res.status(error.status).json({ error: error.message });
       }
+
+      if (handleSpotifyTransientError(error, res, 'Next')) return;
 
       res.status(500).json({ error: 'Failed to skip to next' });
     }

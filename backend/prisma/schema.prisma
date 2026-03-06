@@ -131,6 +131,7 @@ model Guest {
   id         String     @id @default(uuid())
   sessionId  String
   name       String
+  /// Logto user ID (sub claim). Column kept as "clerkUserId" for migration compat.
   clerkUserId String?
   createdAt  DateTime   @default(now())
 
@@ -141,6 +142,17 @@ model Guest {
 
   @@index([sessionId])
   @@index([clerkUserId])
+}
+
+/// Guest credit balance. Replaces the Clerk privateMetadata credit system.
+model UserCredit {
+  id              String   @id @default(uuid())
+  userId          String   @unique   // Logto user ID (sub claim)
+  totalCredits    Int      @default(100)
+  currentCredits  Int      @default(100)
+  refreshDate     String   // ISO date YYYY-MM-DD
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model BannedTrackList {

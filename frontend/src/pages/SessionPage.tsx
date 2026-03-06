@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Copy, Check, Share2, Settings } from 'lucide-react';
 import { guestApi, sessionApi, spotifyApi } from '../services/api';
@@ -9,13 +9,11 @@ import SearchBar from '../components/SearchBar';
 import NowPlaying from '../components/NowPlaying';
 import NextUp from '../components/NextUp';
 import Leaderboard from '../components/Leaderboard';
-import PlaylistSelector from '../components/PlaylistSelector';
 import ScheduledPlaybackManager from '../components/ScheduledPlaybackManager';
 import BannedTracksManager from '../components/BannedTracksManager';
 import { useApiSWR } from '../hooks/useApiSWR';
-import { useClerk, useUser } from '@clerk/clerk-react';
-import { isEmbedded, isIframeAuthenticated, onIframeAuthChange } from '../services/iframeAuth';
-import EmbeddedSignIn from '../components/EmbeddedSignIn';
+import { useLogto } from '@logto/react';
+import { useIframeAuth, isEmbedded } from '../context/IframeAuthContext';
 
 const GUEST_TRACK_COST = 10;
 const SKIP_VOTE_COST = 5;
@@ -30,24 +28,16 @@ export default function SessionPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [autoJoinStatus, setAutoJoinStatus] = useState<'idle' | 'pending' | 'error'>('idle');
   const [autoJoinMessage, setAutoJoinMessage] = useState<string | null>(null);
-  const [signInPrompted, setSignInPrompted] = useState(false);
+  const signInPromptedRef = useRef(false);
   const [guestCredits, setGuestCredits] = useState<CreditState | null>(null);
   const [showScheduled, setShowScheduled] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showBanned, setShowBanned] = useState(true);
   const [settingsAllowExplicit, setSettingsAllowExplicit] = useState(true);
   const [settingsMaxSongDuration, setSettingsMaxSongDuration] = useState<number | ''>('');
-  const { isLoaded: isUserLoaded, isSignedIn } = useUser();
-  const { openSignIn } = useClerk();
-  const [iframeAuthed, setIframeAuthed] = useState(isIframeAuthenticated());
-
-  // Subscribe to iframe auth changes (token received from popup)
-  useEffect(() => {
-    return onIframeAuthChange(() => setIframeAuthed(isIframeAuthenticated()));
-  }, []);
-
-  // In iframe context, auth can come from the iframe token instead of Clerk
-  const isAuthenticated = isSignedIn || (isEmbedded() && iframeAuthed);
+  const { isAuthenticated: isLogtoAuth, isLoading: isAuthLoading, signIn, getIdTokenClaims } = useLogto();
+  const iframeAuth = useIframeAuth();
+  const isAuthenticated = isLogtoAuth || iframeAuth.isAuthenticated;
 
   const {
     data: sessionData,
@@ -114,7 +104,9 @@ export default function SessionPage() {
     setAutoJoinMessage(null);
 
     try {
-      await guestApi.joinById(sessionId);
+      const claims = await getIdTokenClaims();
+      const displayName = claims?.name || iframeAuth.displayName || undefined;
+      await guestApi.joinById(sessionId, displayName);
       await Promise.all([mutateParticipant(), mutateQueue(), mutatePlayback()]);
       setAutoJoinStatus('idle');
     } catch (error: any) {
@@ -130,7 +122,7 @@ export default function SessionPage() {
       }
       throw error;
     }
-  }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback]);
+  }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback, getIdTokenClaims]);
 
   const invitedSessionId =
     typeof location.state === 'object' && location.state?.fromInvite
@@ -175,28 +167,22 @@ export default function SessionPage() {
       const errorMessage = sessionError?.response?.data?.error;
       if (errorMessage && errorMessage.includes('no longer active')) {
         setSessionInactiveError(errorMessage);
-      } else if (!isEmbedded()) {
+      } else {
         navigate('/dashboard');
       }
     }
   }, [sessionError, navigate]);
 
   useEffect(() => {
-    if (!isUserLoaded || isAuthenticated || signInPrompted) {
+    if (isAuthLoading || isAuthenticated || signInPromptedRef.current || isEmbedded) {
       return;
     }
 
-    // Don't try to open Clerk sign-in inside an iframe — it will crash
-    if (isEmbedded()) {
-      return;
-    }
+    signInPromptedRef.current = true;
 
-    setSignInPrompted(true);
-
-    void openSignIn({
-      forceRedirectUrl: window.location.href,
-    });
-  }, [isUserLoaded, isAuthenticated, openSignIn, signInPrompted]);
+    sessionStorage.setItem('logto_post_login_redirect', window.location.pathname);
+    void signIn(`${window.location.origin}/callback`);
+  }, [isAuthLoading, isAuthenticated, signIn]);
 
   useEffect(() => {
 
@@ -304,19 +290,14 @@ export default function SessionPage() {
   };
 
   const handleRequireAccess = async () => {
-    if (!isUserLoaded) {
+    if (isAuthLoading) {
       return;
     }
 
     if (!isAuthenticated) {
-      if (!isEmbedded()) {
-        try {
-          await openSignIn({
-            forceRedirectUrl: window.location.href,
-          });
-        } catch (error) {
-          console.error('Clerk sign-in aborted:', error);
-        }
+      if (!isEmbedded) {
+        sessionStorage.setItem('logto_post_login_redirect', window.location.pathname);
+        void signIn(`${window.location.origin}/callback`);
       }
       return;
     }
@@ -416,7 +397,7 @@ export default function SessionPage() {
     }
   };
 
-  if (!isUserLoaded && !iframeAuthed) {
+  if (isAuthLoading || iframeAuth.isWaitingForParent) {
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
         <div className="text-white text-xl">Loading account...</div>
@@ -425,31 +406,27 @@ export default function SessionPage() {
   }
 
   if (!isAuthenticated) {
-    if (isEmbedded()) {
-      return (
-        <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
-          <EmbeddedSignIn onAuthenticated={() => setIframeAuthed(true)} autoOpen />
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
         <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
           <h2 className="text-2xl font-bold text-white">Sign in to join this session</h2>
           <p className="text-gray-300 text-sm">
-            Sign in with Clerk so everyone can see who is adding songs.
+            {isEmbedded
+              ? 'Please sign in on the main site to use the DJ app.'
+              : 'Sign in so everyone can see who is adding songs.'}
           </p>
-          <button
-            onClick={() => {
-              void openSignIn({
-                forceRedirectUrl: window.location.href,
-              });
-            }}
-            className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
-          >
-            Sign in with Clerk
-          </button>
+          {!isEmbedded && (
+            <button
+              onClick={() => {
+                signInPromptedRef.current = false;
+                sessionStorage.setItem('logto_post_login_redirect', window.location.pathname);
+                void signIn(`${window.location.origin}/callback`);
+              }}
+              className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </div>
     );
@@ -532,7 +509,7 @@ export default function SessionPage() {
     queueState.queue.reduce((sum, item) => sum + item.voteScore, 0);
   const isHost = participant?.type === 'host';
 
-  const embedded = isEmbedded();
+  const embedded = typeof window !== 'undefined' && window.parent !== window;
 
   return (
     <div className="min-h-screen bg-spotify-dark">
@@ -757,16 +734,6 @@ export default function SessionPage() {
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="mt-6">
-              <PlaylistSelector 
-                onPlaylistStarted={() => {
-                  console.log('Playlist started');
-                  // Refresh playback state
-                  void mutatePlayback();
-                }}
-              />
             </div>
           </div>
         )}

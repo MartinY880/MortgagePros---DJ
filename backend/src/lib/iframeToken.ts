@@ -4,21 +4,21 @@ import { config } from '../config';
 /**
  * HMAC-signed token for iframe authentication.
  *
- * When the DJ app is embedded in an iframe, Clerk's client-side SDK
- * cannot establish a session (third-party cookie restrictions).
+ * When the DJ app is embedded in an iframe, the auth SDK cannot
+ * establish a session (third-party cookie restrictions).
  * Instead, the user authenticates in a popup (top-level window) where
- * Clerk works, then the backend mints this token. The popup sends the
+ * Logto works, then the backend mints this token. The popup sends the
  * token to the iframe via postMessage, and the iframe uses it as a
  * Bearer token for all API calls.
  *
- * The token contains the Clerk userId so backend middleware can populate
- * `req.auth.userId` identically to a normal Clerk JWT flow.
+ * The token contains the user ID so backend middleware can populate
+ * `req.auth.userId` identically to a normal JWT flow.
  */
 
 const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface IframeTokenPayload {
-  clerkUserId: string;
+  userId: string;
   exp: number;
 }
 
@@ -27,11 +27,11 @@ function getSecret(): string {
 }
 
 /**
- * Create an HMAC-signed iframe token for the given Clerk user.
+ * Create an HMAC-signed iframe token for the given user.
  */
-export function signIframeToken(clerkUserId: string): string {
+export function signIframeToken(userId: string): string {
   const payload: IframeTokenPayload = {
-    clerkUserId,
+    userId,
     exp: Date.now() + TOKEN_EXPIRY_MS,
   };
 
@@ -71,9 +71,12 @@ export function verifyIframeToken(token: string): IframeTokenPayload | null {
       Buffer.from(encoded, 'base64url').toString(),
     );
 
-    if (!payload.clerkUserId || typeof payload.clerkUserId !== 'string') {
+    // Support both new 'userId' and legacy 'clerkUserId' field names
+    const uid = payload.userId || (payload as any).clerkUserId;
+    if (!uid || typeof uid !== 'string') {
       return null;
     }
+    payload.userId = uid;
 
     if (payload.exp < Date.now()) {
       return null;
