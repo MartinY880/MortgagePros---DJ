@@ -8,6 +8,11 @@ const prisma = new PrismaClient();
 export class AuthController {
   async login(req: Request, res: Response) {
     try {
+      // Stash the Logto user ID so the Spotify callback can link it to the User record
+      if (req.auth?.userId) {
+        (req.session as any)._pendingLogtoId = req.auth.userId;
+      }
+
       const authUrl = spotifyService.getAuthUrl();
       res.json({ authUrl });
     } catch (error) {
@@ -55,6 +60,18 @@ export class AuthController {
 
       // Store user ID in session
       req.session.userId = user.id;
+
+      // Link the Logto user ID to this User so sessions can be repaired after restart
+      const pendingLogtoId = (req.session as any)._pendingLogtoId as string | undefined;
+      if (pendingLogtoId && !user.logtoUserId) {
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { logtoUserId: pendingLogtoId },
+          });
+        } catch { /* ignore — may already be linked */ }
+        delete (req.session as any)._pendingLogtoId;
+      }
 
       // Redirect to frontend
       res.redirect(`${config.server.frontendUrl}/dashboard`);

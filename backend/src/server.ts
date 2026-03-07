@@ -8,7 +8,7 @@ import { config } from './config';
 import { setupSocketHandlers } from './sockets/handlers';
 import { playbackService } from './services/playback.service';
 import { scheduledPlaybackProcessor } from './services/scheduledPlaybackProcessor';
-import { logtoMiddleware } from './middleware/logto.middleware';
+import { logtoMiddleware, repairSession } from './middleware/logto.middleware';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -79,6 +79,9 @@ app.use(
     },
   })
 );
+
+// Restore express-session data from the Logto JWT after container restarts
+app.use(repairSession);
 
 // Make io available in routes
 app.set('io', io);

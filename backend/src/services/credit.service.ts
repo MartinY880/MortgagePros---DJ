@@ -91,10 +91,20 @@ class CreditService {
     let refreshDate = record.refreshDate;
     let changed = false;
 
-    // Upgrade total when the user's role grants more than what is stored
-    if (roleLimit !== null && roleLimit > total && total !== -1) {
+    // Sync total with current role – upgrades AND downgrades
+    if (roleLimit !== null && total !== -1 && roleLimit !== total) {
+      const oldTotal = total;
       total = roleLimit;
       changed = true;
+
+      // Promotion: give the user the extra credits immediately
+      if (total > oldTotal) {
+        current = current + (total - oldTotal);
+      }
+      // Demotion: cap current credits to the new lower total
+      if (current > total) {
+        current = total;
+      }
     }
 
     if (total <= 0 || total < GUEST_DAILY_CREDIT_LIMIT) {
