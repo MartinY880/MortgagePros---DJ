@@ -221,15 +221,15 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
   );
 
   return (
-    <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+    <div className="bg-gradient-to-br from-th-from to-th-to rounded-xl shadow-lg border border-subtle overflow-hidden">
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-500/20 rounded-lg">
             <Calendar size={24} className="text-blue-400" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Scheduled Sets</h3>
-            <p className="text-xs text-gray-400">Queue a special block of tracks for a specific time</p>
+            <h3 className="text-lg font-bold text-primary">Scheduled Sets</h3>
+            <p className="text-xs text-muted">Queue a special block of tracks for a specific time</p>
           </div>
         </div>
 
@@ -246,37 +246,37 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
       )}
 
       {canManage && (
-        <div className="bg-spotify-black/50 border border-gray-800 rounded-lg p-5 space-y-4 hover:border-spotify-green/30 transition-colors">
+        <div className="bg-th-elevated/50 border border-subtle rounded-lg p-5 space-y-4 hover:border-th-brand/30 transition-colors">
           <div>
-            <label className="flex items-center gap-2 text-sm font-semibold text-white mb-3">
-              <Clock size={16} className="text-spotify-green" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-primary mb-3">
+              <Clock size={16} className="text-th-brand" />
               Daily start time
             </label>
             <input
               type="time"
               value={scheduledTime}
               onChange={(event) => setScheduledTime(event.target.value)}
-              className="w-full bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700"
+              className="w-full bg-th-surface text-primary px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 ring-th-brand border border-DEFAULT"
             />
-            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-              <span className="text-blue-400">ℹ️</span>
+            <p className="text-xs text-faint mt-2 flex items-center gap-1">
+              <span className="text-th-info">ℹ️</span>
               Runs every day at the selected time in your timezone
             </p>
           </div>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-white">
-              <Search size={16} className="text-spotify-green" />
+            <label className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <Search size={16} className="text-th-brand" />
               Add tracks
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value)}
                 placeholder="Search Spotify…"
-                className="w-full bg-spotify-gray text-white pl-10 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
+                className="w-full bg-th-surface text-primary pl-10 pr-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 ring-th-brand border border-DEFAULT placeholder-faint"
                 onFocus={() => {
                   if (searchTerm.trim()) {
                     setShowSearchResults(true);
@@ -292,22 +292,22 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
               />
 
               {showSearchResults && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray/95 backdrop-blur border border-spotify-black/40 rounded-lg shadow-xl max-h-96 overflow-y-auto z-30">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-th-overlay backdrop-blur border border-th-elevated/40 rounded-lg shadow-xl max-h-96 overflow-y-auto z-30">
                   {searching && (
-                    <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+                    <div className="p-3 text-muted text-sm flex items-center gap-2">
                       <Loader2 className="animate-spin" size={16} />
                       <span>Searching…</span>
                     </div>
                   )}
                   {!searching && filteredSearchResults.length === 0 ? (
-                    <div className="p-4 text-sm text-gray-400">No results found.</div>
+                    <div className="p-4 text-sm text-muted">No results found.</div>
                   ) : (
                     filteredSearchResults.map((track) => (
                       <button
                         key={track.id}
                         type="button"
                         onClick={() => addTrack(track)}
-                        className="w-full text-left px-4 py-3 hover:bg-spotify-black/60 transition flex items-center gap-3"
+                        className="w-full text-left px-4 py-3 hover:bg-th-elevated/60 transition flex items-center gap-3"
                       >
                         {track.album?.images?.[2]?.url && (
                           <img
@@ -317,24 +317,24 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-semibold truncate">{track.name}</p>
-                          <p className="text-xs text-gray-400 truncate">
+                          <p className="text-primary text-sm font-semibold truncate">{track.name}</p>
+                          <p className="text-xs text-muted truncate">
                             {track.artists.map((artist) => artist.name).join(', ')}
                           </p>
                         </div>
                         {track.explicit && (
-                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-spotify-green/20 text-spotify-green">
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-th-brand/20 text-th-brand">
                             Explicit
                           </span>
                         )}
-                        <Plus className="text-spotify-green shrink-0" size={18} />
+                        <Plus className="text-th-brand shrink-0" size={18} />
                       </button>
                     ))
                   )}
                   <button
                     type="button"
                     onClick={() => setShowSearchResults(false)}
-                    className="w-full px-4 py-2 text-sm text-gray-400 hover:text-white border-t border-spotify-black/30"
+                    className="w-full px-4 py-2 text-sm text-muted hover:text-primary border-t border-th-elevated/30"
                   >
                     Close
                   </button>
@@ -345,23 +345,23 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
 
           {selectedTracks.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-gray-300">Selected tracks</p>
+              <p className="text-sm font-semibold text-secondary">Selected tracks</p>
               <ul className="space-y-2">
                 {selectedTracks.map((track, index) => (
                   <li
                     key={track.id}
-                    className="bg-spotify-black/40 rounded-lg px-4 py-3 flex justify-between items-center border border-spotify-black/30"
+                    className="bg-th-elevated/40 rounded-lg px-4 py-3 flex justify-between items-center border border-th-elevated/30"
                   >
                     <div>
-                      <p className="text-white text-sm font-semibold">
+                      <p className="text-primary text-sm font-semibold">
                         {index + 1}. {track.name}
                       </p>
-                      <p className="text-xs text-gray-400">{track.artists.map((artist) => artist.name).join(', ')}</p>
+                      <p className="text-xs text-muted">{track.artists.map((artist) => artist.name).join(', ')}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => removeTrack(track.id)}
-                      className="text-gray-400 hover:text-red-400 transition"
+                      className="text-muted hover:text-th-error transition"
                     >
                       <XCircle size={18} />
                     </button>
@@ -375,7 +375,7 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting || selectedTracks.length === 0 || !scheduledTime}
-            className="w-full bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-spotify-green/20 disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
+            className="w-full bg-gradient-to-r from-th-brand to-th-success hover:from-th-brand-hover hover:to-green-600 disabled:from-th-hover disabled:to-th-hover disabled:cursor-not-allowed text-primary font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-th-shadow disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
             {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Clock size={20} />}
             <span>{isSubmitting ? 'Scheduling…' : '📅 Schedule Tracks'}</span>
           </button>
@@ -383,32 +383,32 @@ export default function ScheduledPlaybackManager({ sessionId, canManage }: Sched
       )}
 
       <div className="space-y-3">
-        <h4 className="text-lg font-semibold text-white">Upcoming</h4>
+        <h4 className="text-lg font-semibold text-primary">Upcoming</h4>
         {isLoading && upcoming.length === 0 ? (
-          <p className="text-gray-400 text-sm">Loading…</p>
+          <p className="text-muted text-sm">Loading…</p>
         ) : upcoming.length === 0 ? (
-          <p className="text-gray-400 text-sm">No sets scheduled.</p>
+          <p className="text-muted text-sm">No sets scheduled.</p>
         ) : (
           <ul className="space-y-2">
             {upcoming.map((schedule) => (
               <li
                 key={schedule.id}
-                className="bg-spotify-black/40 border border-spotify-black/30 rounded-lg px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                className="bg-th-elevated/40 border border-th-elevated/30 rounded-lg px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
               >
                 <div>
-                  <p className="text-white font-semibold">
+                  <p className="text-primary font-semibold">
                     Daily at {formatDailyTime(schedule)}
                   </p>
-                  <p className="text-xs text-gray-300">Next run: {formatNextRun(schedule.scheduledFor)}</p>
-                  <p className="text-xs text-gray-400">{renderTrackSummary(schedule)}</p>
+                  <p className="text-xs text-secondary">Next run: {formatNextRun(schedule.scheduledFor)}</p>
+                  <p className="text-xs text-muted">{renderTrackSummary(schedule)}</p>
                   {schedule.failureReason && (
                     <p className="text-xs text-red-300">{schedule.failureReason}</p>
                   )}
                   {describeLastRun(schedule) && (
-                    <p className="text-xs text-gray-500">{describeLastRun(schedule)}</p>
+                    <p className="text-xs text-faint">{describeLastRun(schedule)}</p>
                   )}
                   {schedule.status === 'PROCESSING' && (
-                    <p className="text-xs text-spotify-green">Currently running…</p>
+                    <p className="text-xs text-th-brand">Currently running…</p>
                   )}
                 </div>
                 {canManage && schedule.status === 'PENDING' && (

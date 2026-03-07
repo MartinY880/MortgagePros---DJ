@@ -106,18 +106,18 @@ export default function Dashboard() {
 
   if (isAuthLoading || iframeAuth.isWaitingForParent) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
-        <div className="text-white text-xl">Loading account...</div>
+      <div className="min-h-screen bg-th-page flex items-center justify-center">
+        <div className="text-primary text-xl">Loading account...</div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
-        <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
-          <h2 className="text-2xl font-bold text-white">Sign in to manage sessions</h2>
-          <p className="text-gray-300 text-sm">
+      <div className="min-h-screen bg-th-page flex items-center justify-center p-6">
+        <div className="bg-th-surface rounded-lg p-8 text-center space-y-4 max-w-md w-full">
+          <h2 className="text-2xl font-bold text-primary">Sign in to manage sessions</h2>
+          <p className="text-secondary text-sm">
             {isEmbedded
               ? 'Please sign in on the main site to access the dashboard.'
               : 'Sign in to create or join sessions.'}
@@ -128,7 +128,7 @@ export default function Dashboard() {
                 sessionStorage.setItem('logto_post_login_redirect', '/dashboard');
                 void signIn(`${window.location.origin}/callback`);
               }}
-              className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-th-brand hover:bg-th-brand-hover text-primary font-bold py-3 rounded-lg transition"
             >
               Sign In
             </button>
@@ -140,8 +140,8 @@ export default function Dashboard() {
 
   if (userLoading) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen bg-th-page flex items-center justify-center">
+        <div className="text-primary text-xl">Loading...</div>
       </div>
     );
   }
@@ -151,15 +151,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-spotify-dark">
-      <header className="bg-spotify-black border-b border-spotify-gray p-4">
+    <div className="min-h-screen bg-th-page">
+      <header className="bg-th-elevated border-b border p-4">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white">MTGPros DJ</h1>
+          <h1 className="text-2xl font-bold text-primary">MTGPros DJ</h1>
           <div className="flex items-center gap-4">
-            <span className="text-gray-300">Welcome, {user?.displayName}</span>
+            <span className="text-secondary">Welcome, {user?.displayName}</span>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 bg-spotify-gray hover:bg-gray-600 text-white px-4 py-2 rounded-full transition"
+              className="flex items-center gap-2 bg-th-surface hover:bg-th-hover text-primary px-4 py-2 rounded-full transition"
             >
               <LogOut size={20} />
               Logout
@@ -171,10 +171,10 @@ export default function Dashboard() {
       <main className="max-w-4xl mx-auto p-8">
         <div className="grid md:grid-cols-2 gap-8">
           {/* Create Session */}
-          <div className="bg-spotify-gray p-8 rounded-lg">
+          <div className="bg-th-surface p-8 rounded-lg">
             <div className="flex items-center gap-3 mb-6">
-              <Plus size={32} className="text-spotify-green" />
-              <h2 className="text-2xl font-bold text-white">Create Session</h2>
+              <Plus size={32} className="text-th-brand" />
+              <h2 className="text-2xl font-bold text-primary">Create Session</h2>
             </div>
             
             <input
@@ -182,27 +182,27 @@ export default function Dashboard() {
               placeholder="Enter session name..."
               value={sessionName}
               onChange={(e) => setSessionName(e.target.value)}
-              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              className="w-full bg-th-input text-primary px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 ring-th-brand"
               onKeyPress={(e) => e.key === 'Enter' && handleCreateSession()}
             />
 
-            <label className="flex items-center justify-between bg-spotify-black px-4 py-3 rounded-lg mb-4">
+            <label className="flex items-center justify-between bg-th-input px-4 py-3 rounded-lg mb-4">
               <div>
-                <p className="text-white font-semibold text-sm">Allow explicit songs</p>
-                <p className="text-gray-400 text-xs">Guests can queue explicit tracks when enabled.</p>
+                <p className="text-primary font-semibold text-sm">Allow explicit songs</p>
+                <p className="text-muted text-xs">Guests can queue explicit tracks when enabled.</p>
               </div>
               <input
                 type="checkbox"
                 checked={allowExplicit}
                 onChange={(e) => setAllowExplicit(e.target.checked)}
-                className="h-5 w-5 accent-spotify-green"
+                className="h-5 w-5 accent-th-brand"
               />
             </label>
 
-            <label className="bg-spotify-black px-4 py-3 rounded-lg mb-4 block">
+            <label className="bg-th-input px-4 py-3 rounded-lg mb-4 block">
               <div className="mb-2">
-                <p className="text-white font-semibold text-sm">Max song length (minutes)</p>
-                <p className="text-gray-400 text-xs">Leave empty for no limit.</p>
+                <p className="text-primary font-semibold text-sm">Max song length (minutes)</p>
+                <p className="text-muted text-xs">Leave empty for no limit.</p>
               </div>
               <input
                 type="number"
@@ -210,28 +210,28 @@ export default function Dashboard() {
                 placeholder="No limit"
                 value={maxSongDuration}
                 onChange={(e) => setMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full bg-spotify-gray text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                className="w-full bg-th-surface text-primary px-3 py-2 rounded-lg focus:outline-none focus:ring-2 ring-th-brand"
               />
             </label>
             
             <button
               onClick={handleCreateSession}
               disabled={!sessionName.trim()}
-              className="w-full bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-th-brand hover:bg-th-brand-hover disabled:bg-th-hover disabled:cursor-not-allowed text-primary font-bold py-3 rounded-lg transition"
             >
               Create Jukebox
             </button>
             
-            <p className="text-sm text-gray-400 mt-4">
+            <p className="text-sm text-muted mt-4">
               Host a session and share the code with friends
             </p>
           </div>
 
           {/* Join Session */}
-          <div className="bg-spotify-gray p-8 rounded-lg">
+          <div className="bg-th-surface p-8 rounded-lg">
             <div className="flex items-center gap-3 mb-6">
-              <Users size={32} className="text-spotify-green" />
-              <h2 className="text-2xl font-bold text-white">Join Session</h2>
+              <Users size={32} className="text-th-brand" />
+              <h2 className="text-2xl font-bold text-primary">Join Session</h2>
             </div>
             
             <input
@@ -239,7 +239,7 @@ export default function Dashboard() {
               placeholder="Enter session code..."
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-spotify-green uppercase tracking-widest text-center text-xl font-mono"
+              className="w-full bg-th-input text-primary px-4 py-3 rounded-lg mb-4 focus:outline-none focus:ring-2 ring-th-brand uppercase tracking-widest text-center text-xl font-mono"
               maxLength={6}
               onKeyPress={(e) => e.key === 'Enter' && handleJoinSession()}
             />
@@ -247,52 +247,52 @@ export default function Dashboard() {
             <button
               onClick={handleJoinSession}
               disabled={joinCode.length !== 6}
-              className="w-full bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-th-brand hover:bg-th-brand-hover disabled:bg-th-hover disabled:cursor-not-allowed text-primary font-bold py-3 rounded-lg transition"
             >
               Join Jukebox
             </button>
             
-            <p className="text-sm text-gray-400 mt-4">
+            <p className="text-sm text-muted mt-4">
               Enter a 6-character code to join an existing session
             </p>
           </div>
 
           {/* Resume Recent Session */}
-          <div className="bg-spotify-gray p-8 rounded-lg md:col-span-2">
+          <div className="bg-th-surface p-8 rounded-lg md:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-              <Users size={32} className="text-spotify-green" />
-              <h2 className="text-2xl font-bold text-white">Resume Recent Session</h2>
+              <Users size={32} className="text-th-brand" />
+              <h2 className="text-2xl font-bold text-primary">Resume Recent Session</h2>
             </div>
 
             {loadingRecent ? (
-              <p className="text-gray-300">Checking for recent sessions…</p>
+              <p className="text-secondary">Checking for recent sessions…</p>
             ) : recentSession ? (
               <div className="space-y-4">
                 <div>
-                  <p className="text-gray-300 text-sm">Last session:</p>
-                  <p className="text-white text-xl font-bold">{recentSession.name}</p>
-                  <p className="text-gray-400 text-sm">Code: <span className="font-mono text-lg">{recentSession.code}</span></p>
-                  <p className="text-gray-500 text-xs">Status: {recentSession.isActive ? 'Active' : 'Inactive'}</p>
+                  <p className="text-secondary text-sm">Last session:</p>
+                  <p className="text-primary text-xl font-bold">{recentSession.name}</p>
+                  <p className="text-muted text-sm">Code: <span className="font-mono text-lg">{recentSession.code}</span></p>
+                  <p className="text-faint text-xs">Status: {recentSession.isActive ? 'Active' : 'Inactive'}</p>
                 </div>
 
                 {resumeError && (
-                  <p className="text-red-400 text-sm">{resumeError}</p>
+                  <p className="text-th-error text-sm">{resumeError}</p>
                 )}
 
                 <button
                   onClick={handleResumeSession}
                   disabled={resuming}
-                  className="bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition"
+                  className="bg-th-brand hover:bg-th-brand-hover disabled:bg-th-hover disabled:cursor-not-allowed text-primary font-bold py-3 px-6 rounded-lg transition"
                 >
                   {resuming ? 'Reopening…' : 'Resume Session'}
                 </button>
 
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted">
                   Guests can continue to use the same link: {window.location.origin}/join/{recentSession.code}
                 </p>
               </div>
             ) : (
-              <p className="text-gray-300">No previous sessions found. Create one to get started!</p>
+              <p className="text-secondary">No previous sessions found. Create one to get started!</p>
             )}
           </div>
         </div>

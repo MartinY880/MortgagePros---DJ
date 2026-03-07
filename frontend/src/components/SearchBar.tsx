@@ -285,16 +285,16 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
 
   return (
     <div className="relative">
-      <div className="bg-spotify-gray p-4 rounded-lg">
+      <div className="bg-th-surface p-4 rounded-lg">
         <div className="flex gap-2">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted" size={20} />
             <input
               type="text"
               placeholder="Search for songs..."
               value={query}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-              className="w-full bg-spotify-black text-white pl-10 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              className="w-full bg-th-input text-primary pl-10 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 ring-th-brand"
             />
           </div>
         </div>
@@ -304,17 +304,17 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
       {showResults && (
         <div
           ref={resultsContainerRef}
-          className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray rounded-lg shadow-xl max-h-96 overflow-y-auto z-20"
+          className="absolute top-full left-0 right-0 mt-2 bg-th-surface rounded-lg shadow-xl max-h-96 overflow-y-auto z-20"
         >
           {initialLoading && (
-            <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+            <div className="p-3 text-muted text-sm flex items-center gap-2">
               <Loader2 className="animate-spin" size={16} />
               <span>Searching…</span>
             </div>
           )}
 
           {!initialLoading && filteredResults.length === 0 && (
-            <div className="p-8 text-center text-gray-400">No results found</div>
+            <div className="p-8 text-center text-muted">No results found</div>
           )}
 
           {filteredResults.length > 0 && (
@@ -336,7 +336,7 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
                 return (
                   <div
                     key={track.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg transition ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'hover:bg-spotify-black cursor-pointer'}`}
+                    className={`flex items-center gap-3 p-3 rounded-lg transition ${disabled ? 'opacity-50 cursor-not-allowed bg-transparent' : 'hover:bg-th-elevated cursor-pointer'}`}
                     onClick={() => {
                       if (disabled) {
                         return;
@@ -366,9 +366,9 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
                     ) : null}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-white font-semibold truncate">{track.name}</h4>
+                        <h4 className="text-primary font-semibold truncate">{track.name}</h4>
                         {isExplicit && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${disabled ? 'bg-gray-700 text-gray-300' : 'bg-spotify-green/20 text-spotify-green'}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${disabled ? 'bg-th-toggle text-secondary' : 'bg-th-brand/20 text-th-brand'}`}>
                             Explicit
                           </span>
                         )}
@@ -383,14 +383,14 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm truncate">
+                      <p className="text-muted text-sm truncate">
                         {track.artists.map((a) => a.name).join(', ')}
                       </p>
                     </div>
-                    <span className="text-gray-400 text-sm">{formatDuration(track.duration_ms)}</span>
+                    <span className="text-muted text-sm">{formatDuration(track.duration_ms)}</span>
                     <button
                       type="button"
-                      className={`p-2 transition ${disabled ? 'text-gray-500 cursor-not-allowed' : 'text-spotify-green hover:text-spotify-hover'}`}
+                      className={`p-2 transition ${disabled ? 'text-faint cursor-not-allowed' : 'text-th-brand hover:text-th-brand-hover'}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         if (disabled) {
@@ -410,7 +410,7 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
           )}
 
           {isLoadingMore && (
-            <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+            <div className="p-3 text-muted text-sm flex items-center gap-2">
               <Loader2 className="animate-spin" size={16} />
               <span>Loading more…</span>
             </div>
@@ -419,7 +419,7 @@ export default function SearchBar({ sessionId, allowExplicit, onTrackAdded, canS
           <div ref={loadMoreRef} className="h-2" />
           <button
             onClick={() => setShowResults(false)}
-            className="w-full p-3 text-gray-400 hover:text-white transition border-t border-spotify-black"
+            className="w-full p-3 text-muted hover:text-primary transition border-t border-th-elevated"
           >
             Close
           </button>

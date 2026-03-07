@@ -82,16 +82,16 @@ export default function EmbeddedSignIn({ onAuthenticated, autoOpen = false }: { 
   }, [autoOpen, openPopup]);
 
   return (
-    <div className="bg-spotify-gray rounded-lg p-8 max-w-sm w-full mx-auto">
-      <h2 className="text-2xl font-bold text-white text-center mb-2">Sign In</h2>
-      <p className="text-gray-400 text-sm text-center mb-6">
+    <div className="bg-th-surface rounded-lg p-8 max-w-sm w-full mx-auto">
+      <h2 className="text-2xl font-bold text-primary text-center mb-2">Sign In</h2>
+      <p className="text-muted text-sm text-center mb-6">
         Sign in to join this session
       </p>
 
       <button
         onClick={openPopup}
         disabled={loading}
-        className="w-full flex items-center justify-center gap-3 bg-[#2f2f2f] hover:bg-[#3a3a3a] disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition border border-gray-600"
+        className="w-full flex items-center justify-center gap-3 bg-th-surface hover:bg-th-hover disabled:bg-th-toggle disabled:cursor-not-allowed text-primary font-semibold py-3 px-4 rounded-lg transition border border-DEFAULT"
       >
         {loading ? 'Signing in…' : 'Sign In'}
       </button>

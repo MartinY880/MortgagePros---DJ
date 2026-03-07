@@ -264,15 +264,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
   };
 
   return (
-    <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+    <div className="bg-gradient-to-br from-th-from to-th-to rounded-xl shadow-lg border border-subtle overflow-hidden">
       <div className="p-6 space-y-5">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-red-500/20 rounded-lg">
             <Lock size={24} className="text-red-400" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white">Banned Tracks & Artists</h3>
-            <p className="text-xs text-gray-400">Keep unwanted songs or artists out of any session you host</p>
+            <h3 className="text-lg font-bold text-primary">Banned Tracks & Artists</h3>
+            <p className="text-xs text-muted">Keep unwanted songs or artists out of any session you host</p>
           </div>
         </div>
 
@@ -288,12 +288,12 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
         </div>
       )}
 
-      <form onSubmit={handleCreateList} className="bg-spotify-black/50 border border-gray-800 rounded-lg p-5 space-y-3 hover:border-spotify-green/30 transition-colors">
+      <form onSubmit={handleCreateList} className="bg-th-elevated/50 border border-subtle rounded-lg p-5 space-y-3 hover:border-th-brand/30 transition-colors">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-spotify-green/20 rounded">
-            <ListPlus className="text-spotify-green" size={18} />
+          <div className="p-1.5 bg-th-brand/20 rounded">
+            <ListPlus className="text-th-brand" size={18} />
           </div>
-          <span className="text-sm font-semibold text-white">Create new ban list</span>
+          <span className="text-sm font-semibold text-primary">Create new ban list</span>
         </div>
         <div className="flex gap-2">
           <input
@@ -301,12 +301,12 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
             placeholder="List name"
             value={createListName}
             onChange={(event: ChangeEvent<HTMLInputElement>) => setCreateListName(event.target.value)}
-            className="flex-1 bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
+            className="flex-1 bg-th-surface text-primary px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 ring-th-brand border border-DEFAULT placeholder-faint"
           />
           <button
             type="submit"
             disabled={creatingList}
-            className="bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 disabled:from-gray-600 disabled:to-gray-600 text-white px-4 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all shadow-lg shadow-spotify-green/20 disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
+            className="bg-gradient-to-r from-th-brand to-th-success hover:from-th-brand-hover hover:to-green-600 disabled:from-th-hover disabled:to-th-hover text-primary px-4 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition-all shadow-lg shadow-th-shadow disabled:shadow-none transform hover:scale-[1.02] active:scale-[0.98]">
             {creatingList ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
             <span>{creatingList ? 'Creating…' : 'Add List'}</span>
           </button>
@@ -314,13 +314,13 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
         {createError && <p className="text-sm text-red-300">{createError}</p>}
       </form>
 
-      <div className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg p-4 space-y-4">
+      <div className="bg-th-elevated/40 border border-th-elevated/20 rounded-lg p-4 space-y-4">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-gray-300">Select list</label>
+          <label className="text-sm font-semibold text-secondary">Select list</label>
           <select
             value={selectedListId ?? ''}
             onChange={(event) => setSelectedListId(event.target.value || null)}
-            className="bg-spotify-black text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+            className="bg-th-input text-primary px-4 py-2 rounded-lg focus:outline-none focus:ring-2 ring-th-brand"
           >
             {lists.length === 0 && <option value="">No lists yet</option>}
             {lists.map((list) => (
@@ -332,15 +332,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-gray-300">Add tracks to selected list</label>
+          <label className="block text-sm font-semibold text-secondary">Add tracks to selected list</label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
             <input
               type="text"
               value={searchTerm}
               onChange={(event: ChangeEvent<HTMLInputElement>) => setSearchTerm(event.target.value)}
               placeholder="Search Spotify…"
-              className="w-full bg-spotify-black text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              className="w-full bg-th-input text-primary pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 ring-th-brand"
               onFocus={() => {
                 if (searchTerm.trim()) {
                   setShowResults(true);
@@ -356,15 +356,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
             />
 
             {showResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray/95 border border-spotify-black/30 rounded-lg shadow-xl max-h-80 overflow-y-auto z-30">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-th-overlay border border-th-elevated/30 rounded-lg shadow-xl max-h-80 overflow-y-auto z-30">
                 {searching && (
-                  <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+                  <div className="p-3 text-muted text-sm flex items-center gap-2">
                     <Loader2 className="animate-spin" size={16} />
                     <span>Searching…</span>
                   </div>
                 )}
                 {!searching && searchResults.length === 0 ? (
-                  <div className="p-4 text-sm text-gray-400">No results found.</div>
+                  <div className="p-4 text-sm text-muted">No results found.</div>
                 ) : (
                   searchResults.map(({ track, isBanned, reason }) => {
                     const alreadyBanned = isBanned;
@@ -377,7 +377,7 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                             void handleAddTrack(track);
                           }
                         }}
-                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition ${alreadyBanned ? 'opacity-50 cursor-not-allowed' : 'hover:bg-spotify-black/60 cursor-pointer'}`}
+                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition ${alreadyBanned ? 'opacity-50 cursor-not-allowed' : 'hover:bg-th-elevated/60 cursor-pointer'}`}
                       >
                         {track.album?.images?.[2]?.url && (
                           <img
@@ -387,15 +387,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-semibold truncate">{track.name}</p>
-                          <p className="text-xs text-gray-400 truncate">
+                          <p className="text-primary text-sm font-semibold truncate">{track.name}</p>
+                          <p className="text-xs text-muted truncate">
                             {track.artists.map((artist) => artist.name).join(', ')}
                           </p>
                         </div>
                         {alreadyBanned ? (
-                          <span className="text-xs text-gray-400">{reason ?? 'Already banned'}</span>
+                          <span className="text-xs text-muted">{reason ?? 'Already banned'}</span>
                         ) : (
-                          <Plus className="text-spotify-green shrink-0" size={18} />
+                          <Plus className="text-th-brand shrink-0" size={18} />
                         )}
                       </button>
                     );
@@ -404,7 +404,7 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                 <button
                   type="button"
                   onClick={() => setShowResults(false)}
-                  className="w-full px-4 py-2 text-sm text-gray-400 hover:text-white border-t border-spotify-black/30"
+                  className="w-full px-4 py-2 text-sm text-muted hover:text-primary border-t border-th-elevated/30"
                 >
                   Close
                 </button>
@@ -414,15 +414,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-semibold text-gray-300">Add artists to selected list</label>
+          <label className="block text-sm font-semibold text-secondary">Add artists to selected list</label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
             <input
               type="text"
               value={artistSearchTerm}
               onChange={(event: ChangeEvent<HTMLInputElement>) => setArtistSearchTerm(event.target.value)}
               placeholder="Search Spotify artists…"
-              className="w-full bg-spotify-black text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              className="w-full bg-th-input text-primary pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:ring-2 ring-th-brand"
               onFocus={() => {
                 if (artistSearchTerm.trim()) {
                   setShowArtistResults(true);
@@ -438,15 +438,15 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
             />
 
             {showArtistResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-spotify-gray/95 border border-spotify-black/30 rounded-lg shadow-xl max-h-80 overflow-y-auto z-30">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-th-overlay border border-th-elevated/30 rounded-lg shadow-xl max-h-80 overflow-y-auto z-30">
                 {artistSearching && (
-                  <div className="p-3 text-gray-400 text-sm flex items-center gap-2">
+                  <div className="p-3 text-muted text-sm flex items-center gap-2">
                     <Loader2 className="animate-spin" size={16} />
                     <span>Searching…</span>
                   </div>
                 )}
                 {!artistSearching && artistSearchResults.length === 0 ? (
-                  <div className="p-4 text-sm text-gray-400">No artists found.</div>
+                  <div className="p-4 text-sm text-muted">No artists found.</div>
                 ) : (
                   artistSearchResults.map(({ artist, isBanned }) => {
                     const fallbackArtistImage = artist.images && artist.images.length > 0
@@ -462,7 +462,7 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                             void handleAddArtist(artist);
                           }
                         }}
-                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition ${isBanned ? 'opacity-50 cursor-not-allowed' : 'hover:bg-spotify-black/60 cursor-pointer'}`}
+                        className={`w-full text-left px-4 py-3 flex items-center gap-3 transition ${isBanned ? 'opacity-50 cursor-not-allowed' : 'hover:bg-th-elevated/60 cursor-pointer'}`}
                       >
                         {artistImage && (
                           <img
@@ -472,12 +472,12 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-semibold truncate">{artist.name}</p>
+                          <p className="text-primary text-sm font-semibold truncate">{artist.name}</p>
                         </div>
                         {isBanned ? (
-                          <span className="text-xs text-gray-400">Already banned</span>
+                          <span className="text-xs text-muted">Already banned</span>
                         ) : (
-                          <Plus className="text-spotify-green shrink-0" size={18} />
+                          <Plus className="text-th-brand shrink-0" size={18} />
                         )}
                       </button>
                     );
@@ -486,7 +486,7 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
                 <button
                   type="button"
                   onClick={() => setShowArtistResults(false)}
-                  className="w-full px-4 py-2 text-sm text-gray-400 hover:text-white border-t border-spotify-black/30"
+                  className="w-full px-4 py-2 text-sm text-muted hover:text-primary border-t border-th-elevated/30"
                 >
                   Close
                 </button>
@@ -498,13 +498,13 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-lg font-semibold text-white">Banned tracks</h4>
+          <h4 className="text-lg font-semibold text-primary">Banned tracks</h4>
           {selectedList && (
-            <span className="text-xs text-gray-400">{selectedList.tracks.length} tracks</span>
+            <span className="text-xs text-muted">{selectedList.tracks.length} tracks</span>
           )}
         </div>
         {selectedList && selectedList.tracks.length === 0 && (
-          <p className="text-sm text-gray-400">No tracks banned yet. Add songs using the search above.</p>
+          <p className="text-sm text-muted">No tracks banned yet. Add songs using the search above.</p>
         )}
         {selectedList && selectedList.tracks.length > 0 && (
           <div className="max-h-64 overflow-y-auto pr-1">
@@ -512,14 +512,14 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
               {selectedList.tracks.map((track) => (
                 <li
                   key={track.id}
-                  className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
+                  className="bg-th-elevated/40 border border-th-elevated/20 rounded-lg px-4 py-3 flex items-center gap-3"
                 >
                   {track.trackImage && (
                     <img src={track.trackImage} alt={track.trackName} className="w-10 h-10 rounded hidden sm:block" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-semibold truncate">{track.trackName}</p>
-                    <p className="text-xs text-gray-400 truncate">{track.trackArtist}</p>
+                    <p className="text-primary text-sm font-semibold truncate">{track.trackName}</p>
+                    <p className="text-xs text-muted truncate">{track.trackArtist}</p>
                   </div>
                   <button
                     type="button"
@@ -537,13 +537,13 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-lg font-semibold text-white">Banned artists</h4>
+          <h4 className="text-lg font-semibold text-primary">Banned artists</h4>
           {selectedList && (
-            <span className="text-xs text-gray-400">{selectedList.artists.length} artists</span>
+            <span className="text-xs text-muted">{selectedList.artists.length} artists</span>
           )}
         </div>
         {selectedList && selectedList.artists.length === 0 && (
-          <p className="text-sm text-gray-400">No artists banned yet. Add artists using the search above.</p>
+          <p className="text-sm text-muted">No artists banned yet. Add artists using the search above.</p>
         )}
         {selectedList && selectedList.artists.length > 0 && (
           <div className="max-h-64 overflow-y-auto pr-1">
@@ -551,13 +551,13 @@ export default function BannedTracksManager({ sessionId }: BannedTracksManagerPr
               {selectedList.artists.map((artist) => (
                 <li
                   key={artist.id}
-                  className="bg-spotify-black/40 border border-spotify-black/20 rounded-lg px-4 py-3 flex items-center gap-3"
+                  className="bg-th-elevated/40 border border-th-elevated/20 rounded-lg px-4 py-3 flex items-center gap-3"
                 >
                   {artist.artistImage && (
                     <img src={artist.artistImage} alt={artist.artistName} className="w-10 h-10 rounded hidden sm:block" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-semibold truncate">{artist.artistName}</p>
+                    <p className="text-primary text-sm font-semibold truncate">{artist.artistName}</p>
                   </div>
                   <button
                     type="button"

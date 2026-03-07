@@ -148,56 +148,56 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-spotify-black via-spotify-dark to-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-th-elevated via-th-page to-th-elevated flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
         {!isLoading && isAuthenticated && (
           <div className="flex justify-end mb-4">
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="bg-spotify-gray hover:bg-gray-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-full transition"
+              className="bg-th-surface hover:bg-th-hover disabled:bg-th-hover disabled:cursor-not-allowed text-primary px-4 py-2 rounded-full transition"
             >
               {loggingOut ? 'Signing out…' : 'Logout'}
             </button>
           </div>
         )}
         <div className="mb-8 flex justify-center">
-          <img 
-            src="https://mtgpros.com/wp-content/uploads/2023/04/MTGProsSiteLogo.webp" 
-            alt="MortgagePros Logo" 
+          <img
+            src="https://mtgpros.com/wp-content/uploads/2023/04/MTGProsSiteLogo.webp"
+            alt="MortgagePros Logo"
             className="h-24 w-auto"
           />
         </div>
-        
-        <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-spotify-green to-spotify-hover bg-clip-text text-transparent">
+
+        <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-th-brand to-th-brand-hover bg-clip-text text-transparent">
           MTGPros DJ
         </h1>
-        
-        <p className="text-xl text-gray-300 mb-8">
+
+        <p className="text-xl text-secondary mb-8">
           Create collaborative playlists with your friends. Vote on songs, queue tracks, and let everyone be the DJ!
         </p>
-        
+
         <div className="space-y-4">
           <button
             onClick={handleLogin}
-            className="bg-spotify-green hover:bg-spotify-hover text-white font-bold py-4 px-8 rounded-full text-lg transition-all transform hover:scale-105 shadow-lg"
+            className="bg-th-brand hover:bg-th-brand-hover text-primary font-bold py-4 px-8 rounded-full text-lg transition-all transform hover:scale-105 shadow-lg"
           >
             Connect with Spotify
           </button>
-          
-          <p className="text-sm text-gray-400">
+
+          <p className="text-sm text-muted">
             Spotify Premium required for playback control
           </p>
         </div>
 
-        <div className="mt-10 bg-spotify-gray bg-opacity-60 border border-spotify-gray/60 rounded-2xl p-6 text-left">
-          <h2 className="text-2xl font-bold text-white mb-2">Join a Session as a Guest</h2>
-          <p className="text-gray-300 text-sm mb-4">
+        <div className="mt-10 bg-th-surface bg-opacity-60 border border-muted rounded-2xl p-6 text-left">
+          <h2 className="text-2xl font-bold text-primary mb-2">Join a Session as a Guest</h2>
+          <p className="text-secondary text-sm mb-4">
             Have a session code? Sign in and we&apos;ll use your name to let everyone know who&apos;s adding tracks.
           </p>
 
           <div>
-            <label className="block text-gray-400 text-sm mb-2" htmlFor="join-code">Session Code</label>
+            <label className="block text-muted text-sm mb-2" htmlFor="join-code">Session Code</label>
             <input
               id="join-code"
               type="text"
@@ -209,37 +209,37 @@ export default function LandingPage() {
               onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleGuestJoin()}
               maxLength={6}
               placeholder="ABC123"
-              className="w-full bg-spotify-black text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green uppercase tracking-widest text-center font-mono"
+              className="w-full bg-th-input text-primary px-4 py-3 rounded-lg focus:outline-none focus:ring-2 ring-th-brand uppercase tracking-widest text-center font-mono"
             />
           </div>
 
           {joinError && (
-            <div className="text-red-400 text-sm mt-3">{joinError}</div>
+            <div className="text-th-error text-sm mt-3">{joinError}</div>
           )}
 
           <button
             onClick={handleGuestJoin}
             disabled={joinCode.length !== 6 || joining}
-            className="w-full mt-4 bg-spotify-green hover:bg-spotify-hover disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition"
+            className="w-full mt-4 bg-th-brand hover:bg-th-brand-hover disabled:bg-th-hover disabled:cursor-not-allowed text-primary font-bold py-3 rounded-lg transition"
           >
             {joining ? 'Joining...' : 'Join Session'}
           </button>
         </div>
-        
+
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-          <div className="bg-spotify-gray p-6 rounded-lg">
-            <h3 className="text-xl font-bold mb-2 text-spotify-green">🎪 Host Sessions</h3>
-            <p className="text-gray-300">Create a jukebox session and share the code with friends</p>
+          <div className="bg-th-surface p-6 rounded-lg">
+            <h3 className="text-xl font-bold mb-2 text-th-brand">🎪 Host Sessions</h3>
+            <p className="text-secondary">Create a jukebox session and share the code with friends</p>
           </div>
 
-          <div className="bg-spotify-gray p-6 rounded-lg">
-            <h3 className="text-xl font-bold mb-2 text-spotify-green">🎵 Add Songs</h3>
-            <p className="text-gray-300">Search and add tracks to the collaborative queue</p>
+          <div className="bg-th-surface p-6 rounded-lg">
+            <h3 className="text-xl font-bold mb-2 text-th-brand">🎵 Add Songs</h3>
+            <p className="text-secondary">Search and add tracks to the collaborative queue</p>
           </div>
 
-          <div className="bg-spotify-gray p-6 rounded-lg">
-            <h3 className="text-xl font-bold mb-2 text-spotify-green">👍 Vote</h3>
-            <p className="text-gray-300">Upvote your favorites - top songs play first!</p>
+          <div className="bg-th-surface p-6 rounded-lg">
+            <h3 className="text-xl font-bold mb-2 text-th-brand">👍 Vote</h3>
+            <p className="text-secondary">Upvote your favorites - top songs play first!</p>
           </div>
         </div>
       </div>

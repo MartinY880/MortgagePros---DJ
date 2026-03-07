@@ -399,18 +399,18 @@ export default function SessionPage() {
 
   if (isAuthLoading || iframeAuth.isWaitingForParent) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
-        <div className="text-white text-xl">Loading account...</div>
+      <div className="min-h-screen bg-th-page flex items-center justify-center">
+        <div className="text-primary text-xl">Loading account...</div>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center p-6">
-        <div className="bg-spotify-gray rounded-lg p-8 text-center space-y-4 max-w-md w-full">
-          <h2 className="text-2xl font-bold text-white">Sign in to join this session</h2>
-          <p className="text-gray-300 text-sm">
+      <div className="min-h-screen bg-th-page flex items-center justify-center p-6">
+        <div className="bg-th-surface rounded-lg p-8 text-center space-y-4 max-w-md w-full">
+          <h2 className="text-2xl font-bold text-primary">Sign in to join this session</h2>
+          <p className="text-secondary text-sm">
             {isEmbedded
               ? 'Please sign in on the main site to use the DJ app.'
               : 'Sign in so everyone can see who is adding songs.'}
@@ -422,7 +422,7 @@ export default function SessionPage() {
                 sessionStorage.setItem('logto_post_login_redirect', window.location.pathname);
                 void signIn(`${window.location.origin}/callback`);
               }}
-              className="w-full bg-spotify-green hover:bg-spotify-hover text-white font-bold py-3 rounded-lg transition"
+              className="w-full bg-th-brand hover:bg-th-brand-hover text-primary font-bold py-3 rounded-lg transition"
             >
               Sign In
             </button>
@@ -434,8 +434,8 @@ export default function SessionPage() {
 
   if (sessionLoading && !session) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
-        <div className="text-white text-xl">Loading session...</div>
+      <div className="min-h-screen bg-th-page flex items-center justify-center">
+        <div className="text-primary text-xl">Loading session...</div>
       </div>
     );
   }
@@ -512,33 +512,33 @@ export default function SessionPage() {
   const embedded = typeof window !== 'undefined' && window.parent !== window;
 
   return (
-    <div className="min-h-screen bg-spotify-dark">
+    <div className="min-h-screen bg-th-page">
       {/* Header – hidden when embedded */}
       {!embedded && (
-      <header className="bg-spotify-black border-b border-spotify-gray p-4 sticky top-0 z-10">
+      <header className="bg-th-elevated border-b border p-4 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-gray-400 hover:text-white transition"
+              className="text-muted hover:text-primary transition"
             >
               <ArrowLeft size={24} />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-white">{session.name}</h1>
-              <p className="text-sm text-gray-400">Host: {session.host.displayName}</p>
+              <h1 className="text-2xl font-bold text-primary">{session.name}</h1>
+              <p className="text-sm text-muted">Host: {session.host.displayName}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="bg-spotify-gray px-4 py-2 rounded-lg flex items-center gap-2">
-              <span className="text-gray-400 text-sm">Session Code:</span>
-              <span className="font-mono text-xl font-bold text-spotify-green">
+            <div className="bg-th-surface px-4 py-2 rounded-lg flex items-center gap-2">
+              <span className="text-muted text-sm">Session Code:</span>
+              <span className="font-mono text-xl font-bold text-th-brand">
                 {session.code}
               </span>
               <button
                 onClick={handleCopyCode}
-                className="ml-2 text-gray-400 hover:text-white transition"
+                className="ml-2 text-muted hover:text-primary transition"
               >
                 {copied ? <Check size={20} /> : <Copy size={20} />}
               </button>
@@ -546,7 +546,7 @@ export default function SessionPage() {
 
             <button
               onClick={handleCopyInviteLink}
-              className="flex items-center gap-2 bg-spotify-green hover:bg-spotify-hover text-white px-4 py-2 rounded-lg transition"
+              className="flex items-center gap-2 bg-th-brand hover:bg-th-brand-hover text-primary px-4 py-2 rounded-lg transition"
             >
               {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
               <span>{linkCopied ? 'Link Copied!' : 'Copy Invite Link'}</span>
@@ -559,7 +559,7 @@ export default function SessionPage() {
 
       <main className="max-w-6xl mx-auto p-6">
         {autoJoinStatus === 'pending' && participant?.type === 'none' && (
-          <div className="mb-6 bg-spotify-gray/40 text-gray-200 px-4 py-3 rounded-lg text-sm">
+          <div className="mb-6 bg-th-skeleton text-secondary px-4 py-3 rounded-lg text-sm">
             Joining session…
           </div>
         )}
@@ -591,10 +591,10 @@ export default function SessionPage() {
         {isHost && (
           <div className="mb-8">
             <div className="space-y-6">
-              <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+              <div className="bg-gradient-to-br from-th-from to-th-to rounded-xl shadow-lg border border-subtle overflow-hidden">
                   <button
                     onClick={() => setShowScheduled(!showScheduled)}
-                    className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
+                    className="w-full flex items-center justify-between p-5 hover:bg-th-elevated/30 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -606,12 +606,12 @@ export default function SessionPage() {
                         </svg>
                       </div>
                       <div className="text-left">
-                        <h3 className="text-lg font-bold text-white">Scheduled Sets</h3>
-                        <p className="text-xs text-gray-400">Queue tracks at specific times</p>
+                        <h3 className="text-lg font-bold text-primary">Scheduled Sets</h3>
+                        <p className="text-xs text-muted">Queue tracks at specific times</p>
                       </div>
                     </div>
                     <div className={`transform transition-transform duration-200 ${showScheduled ? 'rotate-180' : ''}`}>
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-muted">
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -624,22 +624,22 @@ export default function SessionPage() {
                 </div>
                 
                 {/* Session Settings */}
-                <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden mb-6">
+                <div className="bg-gradient-to-br from-th-from to-th-to rounded-xl shadow-lg border border-subtle overflow-hidden mb-6">
                   <button
                     onClick={() => setShowSettings(!showSettings)}
-                    className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
+                    className="w-full flex items-center justify-between p-5 hover:bg-th-elevated/30 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-spotify-green/20 rounded-lg">
-                        <Settings size={24} className="text-spotify-green" />
+                      <div className="p-2 bg-th-brand/20 rounded-lg">
+                        <Settings size={24} className="text-th-brand" />
                       </div>
                       <div className="text-left">
-                        <h3 className="text-lg font-bold text-white">Session Settings</h3>
-                        <p className="text-xs text-gray-400">Configure session preferences</p>
+                        <h3 className="text-lg font-bold text-primary">Session Settings</h3>
+                        <p className="text-xs text-muted">Configure session preferences</p>
                       </div>
                     </div>
                     <div className={`transform transition-transform duration-200 ${showSettings ? 'rotate-180' : ''}`}>
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-muted">
                         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                       </svg>
                     </div>
@@ -647,15 +647,15 @@ export default function SessionPage() {
 
                   {showSettings && (
                     <div className="p-5 pt-0 space-y-4 animate-in fade-in duration-200">
-                      <div className="h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-4" />
+                      <div className="h-px bg-gradient-to-r from-transparent via-th-divider to-transparent mb-4" />
                       
-                      <label className="flex items-center justify-between bg-spotify-black/50 px-5 py-4 rounded-lg border border-gray-800 hover:border-spotify-green/30 transition-colors cursor-pointer group">
+                      <label className="flex items-center justify-between bg-th-elevated/50 px-5 py-4 rounded-lg border border-subtle hover:border-th-brand/30 transition-colors cursor-pointer group">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-xl">🔞</span>
-                            <p className="text-white font-semibold">Allow explicit songs</p>
+                            <p className="text-primary font-semibold">Allow explicit songs</p>
                           </div>
-                          <p className="text-gray-400 text-xs">Guests can queue explicit tracks when enabled</p>
+                          <p className="text-muted text-xs">Guests can queue explicit tracks when enabled</p>
                         </div>
                         <div className="relative">
                           <input
@@ -664,20 +664,20 @@ export default function SessionPage() {
                             onChange={(e) => setSettingsAllowExplicit(e.target.checked)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-700 peer-focus:ring-2 peer-focus:ring-spotify-green rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-spotify-green"></div>
+                          <div className="w-11 h-6 bg-th-toggle peer-focus:ring-2 peer-focus:ring-th-brand rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-th-brand"></div>
                         </div>
                       </label>
 
-                      <label className="bg-spotify-black/50 px-5 py-4 rounded-lg border border-gray-800 hover:border-spotify-green/30 transition-colors block group">
+                      <label className="bg-th-elevated/50 px-5 py-4 rounded-lg border border-subtle hover:border-th-brand/30 transition-colors block group">
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-xl">⏱️</span>
                           <div>
-                            <p className="text-white font-semibold">Max song length</p>
-                            <p className="text-gray-400 text-xs">
+                            <p className="text-primary font-semibold">Max song length</p>
+                            <p className="text-muted text-xs">
                               Current: {session.maxSongDuration ? (
-                                <span className="text-spotify-green font-medium">{session.maxSongDuration} min</span>
+                                <span className="text-th-brand font-medium">{session.maxSongDuration} min</span>
                               ) : (
-                                <span className="text-yellow-400 font-medium">No limit</span>
+                                <span className="text-th-warning font-medium">No limit</span>
                               )}
                             </p>
                           </div>
@@ -689,15 +689,15 @@ export default function SessionPage() {
                             placeholder="No limit"
                             value={settingsMaxSongDuration}
                             onChange={(e) => setSettingsMaxSongDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                            className="flex-1 bg-spotify-gray text-white px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-spotify-green border border-gray-700 placeholder-gray-500"
+                            className="flex-1 bg-th-surface text-primary px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 ring-th-brand border border-DEFAULT placeholder-faint"
                           />
-                          <span className="text-gray-400 text-sm font-medium">minutes</span>
+                          <span className="text-muted text-sm font-medium">minutes</span>
                         </div>
                       </label>
 
                       <button
                         onClick={handleUpdateSettings}
-                        className="w-full bg-gradient-to-r from-spotify-green to-green-500 hover:from-spotify-hover hover:to-green-600 text-white font-bold py-3.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-spotify-green/20"
+                        className="w-full bg-gradient-to-r from-th-brand to-th-success hover:from-th-brand-hover hover:to-green-600 text-primary font-bold py-3.5 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-th-shadow"
                       >
                         💾 Save Settings
                       </button>
@@ -705,10 +705,10 @@ export default function SessionPage() {
                   )}
                 </div>
 
-              <div className="bg-gradient-to-br from-spotify-gray to-spotify-gray/80 rounded-xl shadow-lg border border-gray-800 overflow-hidden">
+              <div className="bg-gradient-to-br from-th-from to-th-to rounded-xl shadow-lg border border-subtle overflow-hidden">
                 <button
                   onClick={() => setShowBanned(!showBanned)}
-                  className="w-full flex items-center justify-between p-5 hover:bg-spotify-black/30 transition-colors"
+                  className="w-full flex items-center justify-between p-5 hover:bg-th-elevated/30 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-red-500/20 rounded-lg">
@@ -718,12 +718,12 @@ export default function SessionPage() {
                       </svg>
                     </div>
                     <div className="text-left">
-                      <h3 className="text-lg font-bold text-white">Banned Tracks & Artists</h3>
-                      <p className="text-xs text-gray-400">Manage blocked content</p>
+                      <h3 className="text-lg font-bold text-primary">Banned Tracks & Artists</h3>
+                      <p className="text-xs text-muted">Manage blocked content</p>
                     </div>
                   </div>
                   <div className={`transform transition-transform duration-200 ${showBanned ? 'rotate-180' : ''}`}>
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-gray-400">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" className="text-muted">
                       <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -757,19 +757,19 @@ export default function SessionPage() {
             />
             <NextUp track={queueState.nextUp} />
             {participant?.type === 'guest' && (
-              <div className="bg-spotify-gray p-4 rounded-lg flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="bg-th-surface p-4 rounded-lg flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-white font-semibold">Your Credits</p>
-                  <p className="text-gray-400 text-xs">Each track costs {GUEST_TRACK_COST} credits · Votes and skips cost {SKIP_VOTE_COST} credits</p>
+                  <p className="text-primary font-semibold">Your Credits</p>
+                  <p className="text-muted text-xs">Each track costs {GUEST_TRACK_COST} credits · Votes and skips cost {SKIP_VOTE_COST} credits</p>
                 </div>
                 <div className="text-right">
-                  <p className={`${hasInsufficientCredits ? 'text-red-400' : 'text-spotify-green'} text-2xl font-bold`}>
+                  <p className={`${hasInsufficientCredits ? 'text-th-error' : 'text-th-brand'} text-2xl font-bold`}>
                     {guestCredits ? guestCredits.currentCredits : '—'}
-                    <span className="text-gray-400 text-base"> / {guestCredits ? guestCredits.totalCredits : '—'}</span>
+                    <span className="text-muted text-base"> / {guestCredits ? guestCredits.totalCredits : '—'}</span>
                   </p>
-                  <p className="text-gray-500 text-xs">{formatRefreshDate(guestCredits?.refreshDate)}</p>
+                  <p className="text-faint text-xs">{formatRefreshDate(guestCredits?.refreshDate)}</p>
                   {hasInsufficientCredits && (
-                    <p className="text-red-400 text-xs mt-1">You&apos;re out of credits until the next refresh or a host tops you up.</p>
+                    <p className="text-th-error text-xs mt-1">You&apos;re out of credits until the next refresh or a host tops you up.</p>
                   )}
                 </div>
               </div>
@@ -803,11 +803,11 @@ export default function SessionPage() {
               description="Live production stats for everyone in this session. Values refresh automatically when the leaderboard endpoint is wired up."
             />
 
-            <div className="bg-spotify-gray p-6 rounded-lg">
-              <h3 className="text-xl font-bold text-white mb-2">Queue Stats</h3>
-              <div className="space-y-2 text-gray-300">
-                <p>Upcoming tracks: <span className="text-spotify-green font-bold">{upcomingCount}</span></p>
-                <p>Total votes: <span className="text-spotify-green font-bold">{totalVotes}</span></p>
+            <div className="bg-th-surface p-6 rounded-lg">
+              <h3 className="text-xl font-bold text-primary mb-2">Queue Stats</h3>
+              <div className="space-y-2 text-secondary">
+                <p>Upcoming tracks: <span className="text-th-brand font-bold">{upcomingCount}</span></p>
+                <p>Total votes: <span className="text-th-brand font-bold">{totalVotes}</span></p>
               </div>
             </div>
           </div>

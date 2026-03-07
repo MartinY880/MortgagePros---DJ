@@ -2,6 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ── Theme tokens ──────────────────────────────────────────────────
+ *
+ * Default is DARK (standalone DJ app). When the parent iframe sends
+ * theme: 'light' the .light class is added to <html>.
+ */
+
+/* ── Dark mode (default) ────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --color-bg-page: #121212;
+  --color-bg-surface: #282828;
+  --color-bg-elevated: #191414;
+  --color-bg-input: #191414;
+  --color-bg-hover: #3a3a3a;
+  --color-bg-overlay: rgba(25, 20, 20, 0.95);
+
+  /* Text */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d1d5db;
+  --color-text-muted: #9ca3af;
+  --color-text-faint: #6b7280;
+  --color-text-disabled: #4b5563;
+
+  /* Borders */
+  --color-border: #3f3f46;
+  --color-border-subtle: #27272a;
+  --color-border-muted: rgba(40, 40, 40, 0.6);
+
+  /* Brand / Interactive */
+  --color-brand: #3165c3;
+  --color-brand-hover: #777b83;
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #eab308;
+  --color-info: #60a5fa;
+
+  /* Gradients */
+  --color-gradient-from: #282828;
+  --color-gradient-to: rgba(40, 40, 40, 0.8);
+
+  /* Misc */
+  --color-divider: #374151;
+  --color-skeleton: rgba(40, 40, 40, 0.4);
+  --color-toggle-track: #374151;
+  --color-shadow: rgba(49, 101, 195, 0.2);
+}
+
+/* ── Light mode ─────────────────────────────────────────────────── */
+.light {
+  /* Backgrounds */
+  --color-bg-page: #f4f6f8;
+  --color-bg-surface: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-input: #f5f5f5;
+  --color-bg-hover: #e8e8e8;
+  --color-bg-overlay: rgba(255, 255, 255, 0.97);
+
+  /* Text */
+  --color-text-primary: #1e1e1e;
+  --color-text-secondary: #2d2d2d;
+  --color-text-muted: #6b7280;
+  --color-text-faint: #888888;
+  --color-text-disabled: #b0b0b0;
+
+  /* Borders */
+  --color-border: #e8e8e8;
+  --color-border-subtle: #f0f0f0;
+  --color-border-muted: rgba(0, 0, 0, 0.06);
+
+  /* Brand / Interactive */
+  --color-brand: #06427F;
+  --color-brand-hover: #7B7E77;
+
+  /* Status */
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+  --color-warning: #ca8a04;
+  --color-info: #2563eb;
+
+  /* Gradients */
+  --color-gradient-from: #ffffff;
+  --color-gradient-to: #f5f5f5;
+
+  /* Misc */
+  --color-divider: #e8e8e8;
+  --color-skeleton: rgba(0, 0, 0, 0.06);
+  --color-toggle-track: #d1d5db;
+  --color-shadow: rgba(6, 66, 127, 0.15);
+}
+
+/* ── Base styles ─────────────────────────────────────────────────── */
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -9,8 +103,9 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #121212;
-  color: #ffffff;
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 code {

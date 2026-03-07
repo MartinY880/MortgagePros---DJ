@@ -104,17 +104,17 @@ export default function NowPlaying({
 
   if (error) {
     return (
-      <div className="bg-spotify-gray p-6 rounded-lg text-center">
-        <p className="text-gray-400">{error}</p>
+      <div className="bg-th-surface p-6 rounded-lg text-center">
+        <p className="text-muted">{error}</p>
       </div>
     );
   }
 
   if (!playback?.item) {
     return (
-      <div className="bg-spotify-gray p-6 rounded-lg text-center">
-        <p className="text-gray-400">No track currently playing</p>
-        <p className="text-gray-500 text-sm mt-2">
+      <div className="bg-th-surface p-6 rounded-lg text-center">
+        <p className="text-muted">No track currently playing</p>
+        <p className="text-faint text-sm mt-2">
           Open Spotify on your device to start playback
         </p>
       </div>
@@ -122,8 +122,8 @@ export default function NowPlaying({
   }
 
   return (
-    <div className="bg-gradient-to-r from-spotify-gray to-spotify-black p-6 rounded-lg">
-      <h2 className="text-sm text-gray-400 uppercase mb-4">Now Playing</h2>
+    <div className="bg-gradient-to-r from-th-surface to-th-elevated p-6 rounded-lg">
+      <h2 className="text-sm text-muted uppercase mb-4">Now Playing</h2>
       
       <div className="flex items-center gap-4">
         {playback.item.album?.images?.[0] && (
@@ -135,13 +135,13 @@ export default function NowPlaying({
         )}
         
         <div className="flex-1 min-w-0">
-          <h3 className="text-2xl font-bold text-white truncate">{playback.item.name}</h3>
-          <p className="text-lg text-gray-300 truncate">
+          <h3 className="text-2xl font-bold text-primary truncate">{playback.item.name}</h3>
+          <p className="text-lg text-secondary truncate">
             {playback.item.artists?.map((a: any) => a.name).join(', ')}
           </p>
-          <p className="text-sm text-gray-400">{playback.item.album?.name}</p>
+          <p className="text-sm text-muted">{playback.item.album?.name}</p>
           {requester?.name && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-faint mt-1">
               Requested by {requester.name}
               {requester.type === 'guest' ? ' (guest)' : requester.type === 'host' ? ' (host)' : ''}
             </p>
@@ -153,14 +153,14 @@ export default function NowPlaying({
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePlayPause}
-                className="bg-spotify-green hover:bg-spotify-hover text-white p-4 rounded-full transition transform hover:scale-105"
+                className="bg-th-brand hover:bg-th-brand-hover text-primary p-4 rounded-full transition transform hover:scale-105"
               >
                 {isPlaying ? <Pause size={24} /> : <Play size={24} />}
               </button>
               
               <button
                 onClick={handleNext}
-                className="bg-spotify-gray hover:bg-gray-600 text-white p-4 rounded-full transition"
+                className="bg-th-surface hover:bg-th-hover text-primary p-4 rounded-full transition"
               >
                 <SkipForward size={24} />
               </button>
@@ -173,8 +173,8 @@ export default function NowPlaying({
               disabled={guestSkipDisabled}
               className={`p-3 rounded-lg text-sm font-semibold transition w-full sm:w-auto text-center ${
                 guestSkipDisabled
-                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-spotify-gray hover:bg-gray-600 text-white'
+                  ? 'bg-th-toggle text-muted cursor-not-allowed'
+                  : 'bg-th-surface hover:bg-th-hover text-primary'
               }`}
             >
               {guestSkipPending ? 'Submitting…' : `Vote to Skip (-${skipCost} credits)`}
@@ -184,14 +184,14 @@ export default function NowPlaying({
       </div>
 
       {(skipState || showGuestSkip) && (
-        <div className="mt-4 bg-spotify-black/40 rounded-lg p-3 text-sm text-gray-300">
+        <div className="mt-4 bg-th-elevated/40 rounded-lg p-3 text-sm text-secondary">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
-              <span className="text-white font-semibold">Skip votes:</span> {skipProgress}
+              <span className="text-primary font-semibold">Skip votes:</span> {skipProgress}
               {skipTriggered ? ' · Skip triggered' : ''}
             </span>
             {showGuestSkip && !guestHasCredits && (
-              <span className="text-red-400 text-xs">Need {skipCost} credits to vote</span>
+              <span className="text-th-error text-xs">Need {skipCost} credits to vote</span>
             )}
           </div>
         </div>

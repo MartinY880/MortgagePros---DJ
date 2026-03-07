@@ -9,6 +9,7 @@ import { loadAppConfig } from './config/appConfig';
 import { configureFrontendApi } from './services/api';
 import { AppConfigContext } from './context/AppConfigContext';
 import { IframeAuthProvider } from './context/IframeAuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import LogtoTokenSync from './components/LogtoTokenSync';
 
 const rootElement = document.getElementById('root');
@@ -38,6 +39,7 @@ async function bootstrap() {
         <LogtoProvider config={logtoConfig}>
           <LogtoTokenSync apiResource={appConfig.logtoApiResource} />
           <IframeAuthProvider>
+            <ThemeProvider>
             <AppConfigContext.Provider value={appConfig}>
               <SWRConfig
                 value={{
@@ -49,6 +51,7 @@ async function bootstrap() {
                 <App />
               </SWRConfig>
             </AppConfigContext.Provider>
+            </ThemeProvider>
           </IframeAuthProvider>
         </LogtoProvider>
       </React.StrictMode>,

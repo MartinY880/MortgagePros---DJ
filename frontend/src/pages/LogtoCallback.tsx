@@ -22,10 +22,10 @@ export default function LogtoCallback() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-spotify-dark flex items-center justify-center">
+      <div className="min-h-screen bg-th-page flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-spotify-green mx-auto mb-4" />
-          <div className="text-white text-lg font-semibold">Completing sign-in...</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-th-brand mx-auto mb-4" />
+          <div className="text-primary text-lg font-semibold">Completing sign-in...</div>
         </div>
       </div>
     );

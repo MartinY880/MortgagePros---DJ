@@ -80,9 +80,9 @@ export default function WebPlayer({ sessionId, onDeviceReady }: WebPlayerProps) 
 
   if (!isActive || !deviceId) {
     return (
-      <div className="bg-spotify-gray rounded-lg p-4 text-sm text-gray-300">
+      <div className="bg-th-surface rounded-lg p-4 text-sm text-secondary">
         <div className="flex items-center gap-3">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-spotify-green"></div>
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-th-brand"></div>
           <span>Initializing web player...</span>
         </div>
       </div>

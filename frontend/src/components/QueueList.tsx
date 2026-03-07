@@ -113,16 +113,16 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
 
   if (queue.length === 0) {
     return (
-      <div className="bg-spotify-gray p-8 rounded-lg text-center">
-        <p className="text-gray-400 text-lg">No additional tracks queued.</p>
-        <p className="text-gray-500 text-sm mt-2">Search and add songs to line up more music.</p>
+      <div className="bg-th-surface p-8 rounded-lg text-center">
+        <p className="text-muted text-lg">No additional tracks queued.</p>
+        <p className="text-faint text-sm mt-2">Search and add songs to line up more music.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <h2 className="text-2xl font-bold text-white mb-4">Queue ({queue.length})</h2>
+      <h2 className="text-2xl font-bold text-primary mb-4">Queue ({queue.length})</h2>
       {queue.map((item, index) => {
         const currentVote = resolveCurrentVote(item);
         const upvoted = currentVote?.voteType === 1;
@@ -131,10 +131,10 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
         return (
           <div
             key={item.id}
-            className="bg-spotify-gray p-4 rounded-lg flex items-center gap-4 hover:bg-opacity-80 transition"
+            className="bg-th-surface p-4 rounded-lg flex items-center gap-4 hover:bg-opacity-80 transition"
           >
           {/* Track Number */}
-          <div className="text-gray-400 font-bold w-8 text-center">
+          <div className="text-muted font-bold w-8 text-center">
             {index + 1}
           </div>
 
@@ -149,9 +149,9 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
 
           {/* Track Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-white font-semibold truncate">{item.trackName}</h3>
-            <p className="text-gray-400 text-sm truncate">{item.trackArtist}</p>
-            <p className="text-gray-500 text-xs">
+            <h3 className="text-primary font-semibold truncate">{item.trackName}</h3>
+            <p className="text-muted text-sm truncate">{item.trackArtist}</p>
+            <p className="text-faint text-xs">
               Added by {item.addedBy?.displayName || item.addedByGuest?.name || 'Guest'} · {formatDuration(item.trackDuration)}
             </p>
           </div>
@@ -162,8 +162,8 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
               onClick={() => handleVote(item.id, 1)}
               className={`transition p-2 rounded border border-transparent ${
                 upvoted
-                  ? 'bg-spotify-green/20 text-spotify-green border-spotify-green'
-                  : 'text-gray-400 hover:text-spotify-green hover:bg-spotify-black'
+                  ? 'bg-th-brand/20 text-th-brand border-th-brand'
+                  : 'text-muted hover:text-th-brand hover:bg-th-elevated'
               }`}
               aria-pressed={upvoted}
               title={upvoted ? 'You liked this track' : 'Upvote'}
@@ -172,9 +172,9 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
             </button>
             
             <span className={`text-xl font-bold min-w-[2rem] text-center ${
-              item.voteScore > 0 ? 'text-spotify-green' : 
-              item.voteScore < 0 ? 'text-red-500' : 
-              'text-gray-400'
+              item.voteScore > 0 ? 'text-th-brand' : 
+              item.voteScore < 0 ? 'text-th-error' : 
+              'text-muted'
             }`}>
               {item.voteScore}
             </span>
@@ -183,8 +183,8 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
               onClick={() => handleVote(item.id, -1)}
               className={`transition p-2 rounded border border-transparent ${
                 downvoted
-                  ? 'bg-red-500/20 text-red-400 border-red-500'
-                  : 'text-gray-400 hover:text-red-500 hover:bg-spotify-black'
+                  ? 'bg-red-500/20 text-th-error border-th-error'
+                  : 'text-muted hover:text-th-error hover:bg-th-elevated'
               }`}
               aria-pressed={downvoted}
               title={downvoted ? 'You disliked this track' : 'Downvote'}
@@ -197,7 +197,7 @@ export default function QueueList({ nextUp: _nextUp, queue, sessionId: _sessionI
           {canRemove(item) && (
             <button
               onClick={() => handleRemove(item.id)}
-              className="text-gray-400 hover:text-red-500 transition p-2 rounded hover:bg-spotify-black"
+              className="text-muted hover:text-th-error transition p-2 rounded hover:bg-th-elevated"
             >
               <Trash2 size={20} />
             </button>
