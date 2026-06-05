@@ -46,6 +46,10 @@ services:
       LOGTO_ENDPOINT: "${LOGTO_ENDPOINT}"
       LOGTO_APP_ID: "${LOGTO_APP_ID}"
       LOGTO_API_RESOURCE: "${LOGTO_API_RESOURCE}"
+      # Optional: Logto Management API (M2M) for server-side display-name resolution
+      LOGTO_M2M_APP_ID: "${LOGTO_M2M_APP_ID:-}"
+      LOGTO_M2M_APP_SECRET: "${LOGTO_M2M_APP_SECRET:-}"
+      LOGTO_MANAGEMENT_RESOURCE: "${LOGTO_MANAGEMENT_RESOURCE:-https://default.logto.app/api}"
 
       # Frontend URL - Update this to your domain when using Traefik
       FRONTEND_URL: "${FRONTEND_URL:-https://dj-dev.pros.mortgage}"

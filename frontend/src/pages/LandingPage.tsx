@@ -55,7 +55,7 @@ export default function LandingPage() {
     } finally {
       setJoining(false);
     }
-  }, [joinCode, navigate, getIdTokenClaims]);
+  }, [joinCode, navigate, getIdTokenClaims, iframeAuth.displayName]);
 
   // After auth completes, execute pending action
   useEffect(() => {

@@ -75,7 +75,13 @@ export default function SessionPage() {
     error: participantError,
     mutate: mutateParticipant,
   } = useApiSWR<{ participant: SessionParticipant }>(
-    isAuthenticated && sessionId ? `/sessions/${sessionId}/participant` : null,
+    isAuthenticated && sessionId
+      ? `/sessions/${sessionId}/participant${
+          iframeAuth.displayName
+            ? `?displayName=${encodeURIComponent(iframeAuth.displayName)}`
+            : ''
+        }`
+      : null,
     { revalidateOnFocus: false }
   );
   const participant: SessionParticipant | null = participantData?.participant ?? (participantError ? { type: 'none' } : null);
@@ -122,7 +128,7 @@ export default function SessionPage() {
       }
       throw error;
     }
-  }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback, getIdTokenClaims]);
+  }, [sessionId, mutateParticipant, mutateQueue, mutatePlayback, getIdTokenClaims, iframeAuth.displayName]);
 
   const invitedSessionId =
     typeof location.state === 'object' && location.state?.fromInvite

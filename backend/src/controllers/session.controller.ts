@@ -1,20 +1,43 @@
 import { Request, Response } from 'express';
 import { sessionService } from '../services/session.service';
 import { creditService, CreditError, CreditState } from '../services/credit.service';
+import { getLogtoUserDisplayName } from '../lib/logtoManagement';
+
+/** Fallback name stored when no display name is available at join time. */
+const GUEST_FALLBACK_NAME = 'Guest DJ';
 
 export class SessionController {
   /**
-   * Resolve a display name for the joining user.
-   * The frontend sends the user's name from Logto ID token claims.
-   * Falls back to 'Guest DJ' if not provided.
+   * Resolve a display name for the joining user, in priority order:
+   *   1. Name supplied by the client (join body or participant query string)
+   *   2. Authoritative lookup from Logto via the verified user ID
+   *   3. The 'Guest DJ' fallback
    */
-  private resolveDisplayName(req: Request): string {
-    const name = req.body?.displayName;
-    if (typeof name === 'string') {
-      const trimmed = name.trim();
-      if (trimmed.length > 0) return trimmed;
+  private async resolveDisplayName(req: Request): Promise<string> {
+    const provided = this.extractProvidedName(req);
+    if (provided) return provided;
+
+    const authUserId = req.auth?.userId;
+    if (authUserId) {
+      const fromLogto = await getLogtoUserDisplayName(authUserId);
+      if (fromLogto) return fromLogto;
     }
-    return 'Guest DJ';
+
+    return GUEST_FALLBACK_NAME;
+  }
+
+  /**
+   * Extract a display name candidate from the request body or query string.
+   * Participant polling is a GET, so the name arrives as `?displayName=`.
+   */
+  private extractProvidedName(req: Request): string {
+    const fromBody = req.body?.displayName;
+    const fromQuery = req.query?.displayName;
+    const raw =
+      (typeof fromBody === 'string' && fromBody) ||
+      (typeof fromQuery === 'string' && fromQuery) ||
+      '';
+    return raw.trim();
   }
 
   create = async (req: Request, res: Response) => {
@@ -89,7 +112,7 @@ export class SessionController {
         throw error;
       }
 
-      const guestName = this.resolveDisplayName(req);
+      const guestName = await this.resolveDisplayName(req);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
@@ -144,7 +167,7 @@ export class SessionController {
         throw error;
       }
 
-      const guestName = this.resolveDisplayName(req);
+      const guestName = await this.resolveDisplayName(req);
       const guest = await sessionService.createOrUpdateGuest(
         session.id,
         req.session.guestSessions?.[session.id]?.guestId,
@@ -220,11 +243,18 @@ export class SessionController {
         let guest = await sessionService.getGuestById(guestData.guestId);
 
         if (guest) {
-          // If the request body contains a displayName, sync it
+          // Self-heal: if the stored name is still the 'Guest DJ' fallback
+          // (e.g. the name wasn't available at join time), repair it from the
+          // client-provided name or, failing that, an authoritative Logto
+          // lookup. Restricted to the fallback so a deliberately-set name is
+          // never clobbered by a later poll.
           const authUserId = req.auth?.userId;
-          if (authUserId && req.body?.displayName) {
-            const latestName = req.body.displayName.trim();
-            if (latestName && latestName !== guest.name) {
+          if (authUserId && guest.name === GUEST_FALLBACK_NAME) {
+            let latestName = this.extractProvidedName(req);
+            if (!latestName) {
+              latestName = (await getLogtoUserDisplayName(authUserId)) ?? '';
+            }
+            if (latestName && latestName !== GUEST_FALLBACK_NAME) {
               guest = await sessionService.createOrUpdateGuest(session.id, guest.id, latestName, authUserId);
             }
           }

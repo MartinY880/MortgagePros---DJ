@@ -4,7 +4,9 @@
 FROM rustlang/rust:nightly-alpine3.19 AS librespot-builder
 
 ARG LIBRESPOT_REPO=https://github.com/librespot-org/librespot.git
-ARG LIBRESPOT_REF=master
+# Pin to a release tag — librespot-org renamed the default branch from
+# `master` to `dev`, so a moving branch is both broken and non-reproducible.
+ARG LIBRESPOT_REF=v0.8.0
 
 RUN apk add --no-cache \
   git \

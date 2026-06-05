@@ -102,6 +102,15 @@ export const config = {
     endpoint: logtoEndpoint!,
     appId: logtoAppId!,
     apiResource: logtoApiResource!,
+    // Optional Machine-to-Machine credentials for the Logto Management API.
+    // When set, the backend can resolve a user's display name from their
+    // Logto ID (sub) instead of relying on the client to pass it.
+    m2mAppId: process.env.LOGTO_M2M_APP_ID?.trim() || '',
+    m2mAppSecret: process.env.LOGTO_M2M_APP_SECRET?.trim() || '',
+    // Management API resource indicator. Self-hosted default below; on Logto
+    // Cloud override with https://<tenant-id>.logto.app/api.
+    managementResource:
+      process.env.LOGTO_MANAGEMENT_RESOURCE?.trim() || 'https://default.logto.app/api',
   },
   frontend: {
     apiBaseUrl,
